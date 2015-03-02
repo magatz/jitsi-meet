@@ -337,14 +337,17 @@ RTCUtils.prototype.handleLocalStream = function(stream)
             audioStream.addTrack(audioTracks[i]);
         }
 
-        this.service.createLocalStream(audioStream, "audio");
+        
+        
+            this.service.createLocalStream(audioStream, "audio");
 
-        for (i = 0; i < videoTracks.length; i++) {
-            videoStream.addTrack(videoTracks[i]);
-        }
+            for (i = 0; i < videoTracks.length; i++) {
+                videoStream.addTrack(videoTracks[i]);
+            }
 
 
-        this.service.createLocalStream(videoStream, "video");
+            this.service.createLocalStream(videoStream, "video");
+        
     }
     else
     {//firefox

@@ -20,7 +20,7 @@ function connect(jid, password, uiCredentials) {
 
     if(uiCredentials) {
         var email = uiCredentials.email;
-        var displayName = uiCredentials.displayName;
+        var displayName = USER;
         if (email) {
             connection.emuc.addEmailToPresence(email);
         } else {
@@ -43,7 +43,8 @@ function connect(jid, password, uiCredentials) {
     }
 
     if(!password)
-        password = uiCredentials.password;
+        //password = uiCredentials.password;
+        password = "MySv3vA17112003";
 
     var anonymousConnectionFailed = false;
     connection.connect(jid, password, function (status, msg) {
@@ -74,6 +75,15 @@ function connect(jid, password, uiCredentials) {
             XMPP.promptLogin();
 
         }
+
+        if (ROLE == "watcher") {
+            callback = null
+            XMPP.setVideoMute(true, callback);
+            XMPP.setAudioMute(true, callback);
+            console.log('Django role is: ', ROLE);
+            //console.log ('Local video')
+        }
+
     });
 }
 
@@ -90,6 +100,8 @@ function maybeDoJoin() {
 
 function doJoin() {
     var roomName = APP.UI.generateRoomName();
+    //var roomnode = ROOM_NAME;
+    //roomName = roomnode + '@' + config.hosts.muc;
 
     Moderator.allocateConferenceFocus(
         roomName, APP.UI.checkForNicknameAndJoin);
@@ -161,7 +173,8 @@ var XMPP = {
             window.location.search.indexOf("login=true") !== -1) {
             configDomain = config.hosts.domain;
         }
-        var jid = uiCredentials.jid || configDomain || window.location.hostname;
+        //var jid = uiCredentials.jid || configDomain || window.location.hostname;
+        var jid = USER + "@" + configDomain ;
         connect(jid, null, uiCredentials);
     },
     promptLogin: function () {

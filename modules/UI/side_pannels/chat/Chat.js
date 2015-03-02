@@ -16,15 +16,15 @@ var unreadMessages = 0;
  */
 function setVisualNotification(show) {
     var unreadMsgElement = document.getElementById('unreadMessages');
-    var unreadMsgBottomElement
-        = document.getElementById('bottomUnreadMessages');
+    //var unreadMsgBottomElement
+    //    = document.getElementById('bottomUnreadMessages');
 
     var glower = $('#chatButton');
     var bottomGlower = $('#chatBottomButton');
 
     if (unreadMessages) {
         unreadMsgElement.innerHTML = unreadMessages.toString();
-        unreadMsgBottomElement.innerHTML = unreadMessages.toString();
+        //unreadMsgBottomElement.innerHTML = unreadMessages.toString();
 
         ToolbarToggler.dockToolbar(true);
 
@@ -42,15 +42,15 @@ function setVisualNotification(show) {
 
         var chatBottomButtonElement
             = document.getElementById('chatBottomButton').parentNode;
-        var bottomLeftIndent = (UIUtil.getTextWidth(chatBottomButtonElement) -
-            UIUtil.getTextWidth(unreadMsgBottomElement)) / 2;
-        var bottomTopIndent = (UIUtil.getTextHeight(chatBottomButtonElement) -
-            UIUtil.getTextHeight(unreadMsgBottomElement)) / 2 - 2;
+        //var bottomLeftIndent = (UIUtil.getTextWidth(chatBottomButtonElement) -
+        //    UIUtil.getTextWidth(unreadMsgBottomElement)) / 2;
+        //var bottomTopIndent = (UIUtil.getTextHeight(chatBottomButtonElement) -
+        //    UIUtil.getTextHeight(unreadMsgBottomElement)) / 2 - 2;
 
-        unreadMsgBottomElement.setAttribute(
-            'style',
-                'top:' + bottomTopIndent +
-                '; left:' + bottomLeftIndent + ';');
+        //unreadMsgBottomElement.setAttribute(
+        //    'style',
+        //        'top:' + bottomTopIndent +
+        //        '; left:' + bottomLeftIndent + ';');
 
 
         if (!glower.hasClass('icon-chat-simple')) {
@@ -60,7 +60,7 @@ function setVisualNotification(show) {
     }
     else {
         unreadMsgElement.innerHTML = '';
-        unreadMsgBottomElement.innerHTML = '';
+        //unreadMsgBottomElement.innerHTML = '';
         glower.removeClass('icon-chat-simple');
         glower.addClass('icon-chat');
     }
@@ -222,7 +222,7 @@ var Chat = (function (my) {
                 setVisualNotification(false);
             });
 
-        addSmileys();
+        //addSmileys();
     };
 
     /**
@@ -254,7 +254,7 @@ var Chat = (function (my) {
 
         var messageContainer =
             '<div class="chatmessage">'+
-                '<img src="../images/chatArrow.svg" class="chatArrow">' +
+                '<img src="http://echat-dev.s3.amazonaws.com/static/img/jitsi/images/chatArrow.svg" class="chatArrow">' +
                 '<div class="username ' + divClassName +'">' + escDisplayName +
                 '</div>' + '<div class="timestamp">' + getCurrentTime() +
                 '</div>' + '<div class="usermessage">' + message + '</div>' +

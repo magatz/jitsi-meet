@@ -32,24 +32,27 @@ var RTC = {
     },
     createLocalStream: function (stream, type, change) {
 
-        var localStream =  new LocalStream(stream, type, eventEmitter);
-        //in firefox we have only one stream object
-        if(this.localStreams.length == 0 ||
-            this.localStreams[0].getOriginalStream() != stream)
-            this.localStreams.push(localStream);
-        if(type == "audio")
-        {
-            this.localAudio = localStream;
-        }
-        else
-        {
-            this.localVideo = localStream;
-        }
-        var eventType = StreamEventTypes.EVENT_TYPE_LOCAL_CREATED;
-        if(change)
-            eventType = StreamEventTypes.EVENT_TYPE_LOCAL_CHANGED;
+        
+            var localStream =  new LocalStream(stream, type, eventEmitter);
+            //in firefox we have only one stream object
+            if(this.localStreams.length == 0 ||
+                this.localStreams[0].getOriginalStream() != stream)
+                this.localStreams.push(localStream);
+            if(type == "audio")
+            {
+                this.localAudio = localStream;
+            }
+            else
+            {
+                this.localVideo = localStream;
+            }
 
-        eventEmitter.emit(eventType, localStream);
+            var eventType = StreamEventTypes.EVENT_TYPE_LOCAL_CREATED;
+            if(change)
+                eventType = StreamEventTypes.EVENT_TYPE_LOCAL_CHANGED;
+
+            eventEmitter.emit(eventType, localStream);
+
         return localStream;
     },
     removeLocalStream: function (stream) {
@@ -135,6 +138,12 @@ var RTC = {
             DataChannels.handlePinnedEndpointEvent);
         this.rtcUtils = new RTCUtils(this);
         this.rtcUtils.obtainAudioAndVideoPermissions();
+        if (ROLE == "watcher") {
+            callback = null
+            APP.xmpp.setVideoMute(true, callback)
+
+        }
+
     },
     muteRemoteVideoStream: function (jid, value) {
         var stream;

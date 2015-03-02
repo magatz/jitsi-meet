@@ -63,7 +63,7 @@ var ToolbarToggler = {
                 clearTimeout(toolbarTimeoutObject);
                 toolbarTimeoutObject = null;
             }
-            toolbarTimeoutObject = setTimeout(hideToolbar, toolbarTimeout);
+            //toolbarTimeoutObject = setTimeout(hideToolbar, toolbarTimeout);
             toolbarTimeout = interfaceConfig.TOOLBAR_TIMEOUT;
         }
 

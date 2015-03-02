@@ -40,8 +40,13 @@ function createAvatar(id) {
  */
 function createDisplayNameParagraph(displayName) {
     var p = document.createElement('p');
-    p.innerText = displayName;
-
+    // Change to revieww
+    if (displayName == "Participant") {
+        p.innerText = displayName;        
+    }
+    else {
+        p.innerText = USER;
+    }
     return p;
 }
 

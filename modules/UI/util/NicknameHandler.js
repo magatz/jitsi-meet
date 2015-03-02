@@ -8,14 +8,17 @@ var NickanameHandler = {
         eventEmitter = emitter;
         var storedDisplayName = window.localStorage.displayname;
         if (storedDisplayName) {
-            nickname = storedDisplayName;
+            nickname = USER;
+        }
+        else {
+            nickname = USER;   
         }
     },
     setNickname: function (newNickname) {
-        if (!newNickname || nickname === newNickname)
-            return;
+        //if (!newNickname || nickname === newNickname)
+        //    return;
 
-        nickname = newNickname;
+        nickname = USER;
         window.localStorage.displayname = nickname;
         eventEmitter.emit(UIEvents.NICKNAME_CHANGED, newNickname);
     },

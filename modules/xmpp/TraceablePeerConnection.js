@@ -119,8 +119,8 @@ TraceablePeerConnection.prototype.addStream = function (stream) {
     APP.simulcast.resetSender();
     try
     {
-        this.peerconnection.addStream(stream);
-    }
+        this.peerconnection.addStream(stream);}
+    
     catch (e)
     {
         console.error(e);

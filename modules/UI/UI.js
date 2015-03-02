@@ -554,15 +554,16 @@ UI.getLargeVideoState = function()
 UI.generateRoomName = function() {
     if(roomName)
         return roomName;
-    var roomnode = null;
-    var path = window.location.pathname;
+    //var roomnode = null;
+    var roomnode = ROOM_NAME;
+    //var path = window.location.pathname;
 
     // determinde the room node from the url
     // TODO: just the roomnode or the whole bare jid?
-    if (config.getroomnode && typeof config.getroomnode === 'function') {
+    //if (config.getroomnode && typeof config.getroomnode === 'function') {
         // custom function might be responsible for doing the pushstate
-        roomnode = config.getroomnode(path);
-    } else {
+    //    roomnode = config.getroomnode(path);
+    //} else {
         /* fall back to default strategy
          * this is making assumptions about how the URL->room mapping happens.
          * It currently assumes deployment at root, with a rewrite like the
@@ -571,16 +572,16 @@ UI.generateRoomName = function() {
          rewrite ^/(.*)$ / break;
          }
          */
-        if (path.length > 1) {
-            roomnode = path.substr(1).toLowerCase();
-        } else {
-            var word = RoomNameGenerator.generateRoomWithoutSeparator();
-            roomnode = word.toLowerCase();
+    //    if (path.length > 1) {
+    //        roomnode = path.substr(1).toLowerCase();
+    //    } else {
+    //        var word = RoomNameGenerator.generateRoomWithoutSeparator();
+    //        roomnode = word.toLowerCase();
 
-            window.history.pushState('VideoChat',
-                    'Room: ' + word, window.location.pathname + word);
-        }
-    }
+    //        window.history.pushState('VideoChat',
+    //                'Room: ' + word, window.location.pathname + word);
+    //    }
+    //}
 
     roomName = roomnode + '@' + config.hosts.muc;
     return roomName;

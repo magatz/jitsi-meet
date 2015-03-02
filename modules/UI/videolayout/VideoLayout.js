@@ -530,15 +530,26 @@ var VideoLayout = (function (my) {
 
     my.changeLocalAudio = function(stream) {
         APP.RTC.attachMediaStream($('#localAudio'), stream.getOriginalStream());
-        document.getElementById('localAudio').autoplay = true;
+        
         document.getElementById('localAudio').volume = 0;
-        if (preMuted) {
-            if(!APP.UI.setAudioMuted(true))
-            {
-                preMuted = mute;
-            }
-            preMuted = false;
+        if (ROLE == "watcher") {
+            APP.UI.setAudioMuted(true)
+
+            document.getElementById('localAudio').autoplay = true;    
         }
+        else
+            document.getElementById('localAudio').autoplay = true; 
+            {
+                if (preMuted) {
+                    preMuted = false;
+                    if(!APP.UI.setAudioMuted(true))
+                    {   
+                       preMuted = mute;
+                    }
+                    preMuted = false;
+                    }
+                APP.UI.setAudioMuted(false)    
+            }
     };
 
     my.changeLocalVideo = function(stream) {
@@ -552,8 +563,13 @@ var VideoLayout = (function (my) {
         localVideo.volume = 0; // is it required if audio is separated ?
         localVideo.oncontextmenu = function () { return false; };
 
-        var localVideoContainer = document.getElementById('localVideoWrapper');
-        localVideoContainer.appendChild(localVideo);
+        if (ROLE == "performer") {
+            var localVideoContainer = document.getElementById('localVideoWrapper');
+            localVideoContainer.appendChild(localVideo);
+            }
+        else if (ROLE == "watcher") {
+            var localVideoContainer = document.getElementById('localVideoWrapper');
+        }    
 
         // Set default display name.
         setDisplayName('localVideoContainer');
@@ -670,6 +686,20 @@ var VideoLayout = (function (my) {
 
             container  = document.getElementById(
                     'participant_' + Strophe.getResourceFromJid(stream.peerjid));
+            performer_id = stream.peerjid.substring(stream.peerjid.indexOf("/") + 1)
+
+            if (ROLE == "watcher" ) {
+                if (performer_id == PERFORMER) {
+                    if (container) {
+                        VideoLayout.addRemoteStreamElement( container,
+                            stream.sid,
+                            stream.getOriginalStream(),
+                            stream.peerjid,
+                            stream.ssrc);
+                    }
+                }
+            }
+                 
         } else {
             var id = stream.getOriginalStream().id;
             if (id !== 'mixedmslabel'
@@ -688,15 +718,12 @@ var VideoLayout = (function (my) {
             container.className = 'videocontainer';
             remotes.appendChild(container);
             UIUtil.playSoundNotification('userJoined');
+        
         }
+        
 
-        if (container) {
-            VideoLayout.addRemoteStreamElement( container,
-                stream.sid,
-                stream.getOriginalStream(),
-                stream.peerjid,
-                stream.ssrc);
-        }
+        
+        
     }
 
     my.getLargeVideoState = function () {
@@ -1020,7 +1047,9 @@ var VideoLayout = (function (my) {
 
         var videoSpanId = 'participant_' + resourceJid;
 
+        
         if (!$('#' + videoSpanId).length) {
+            
             var container =
                 VideoLayout.addRemoteVideoContainer(peerJid, videoSpanId, userId);
             Avatar.setUserAvatar(peerJid, userId);
@@ -1043,7 +1072,8 @@ var VideoLayout = (function (my) {
             }
             else
                 VideoLayout.resizeThumbnails();
-        }
+        }    
+        
     };
 
     my.addRemoteVideoContainer = function(peerJid, spanId) {

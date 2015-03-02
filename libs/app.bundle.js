@@ -702,24 +702,27 @@ var RTC = {
     },
     createLocalStream: function (stream, type, change) {
 
-        var localStream =  new LocalStream(stream, type, eventEmitter);
-        //in firefox we have only one stream object
-        if(this.localStreams.length == 0 ||
-            this.localStreams[0].getOriginalStream() != stream)
-            this.localStreams.push(localStream);
-        if(type == "audio")
-        {
-            this.localAudio = localStream;
-        }
-        else
-        {
-            this.localVideo = localStream;
-        }
-        var eventType = StreamEventTypes.EVENT_TYPE_LOCAL_CREATED;
-        if(change)
-            eventType = StreamEventTypes.EVENT_TYPE_LOCAL_CHANGED;
+        
+            var localStream =  new LocalStream(stream, type, eventEmitter);
+            //in firefox we have only one stream object
+            if(this.localStreams.length == 0 ||
+                this.localStreams[0].getOriginalStream() != stream)
+                this.localStreams.push(localStream);
+            if(type == "audio")
+            {
+                this.localAudio = localStream;
+            }
+            else
+            {
+                this.localVideo = localStream;
+            }
 
-        eventEmitter.emit(eventType, localStream);
+            var eventType = StreamEventTypes.EVENT_TYPE_LOCAL_CREATED;
+            if(change)
+                eventType = StreamEventTypes.EVENT_TYPE_LOCAL_CHANGED;
+
+            eventEmitter.emit(eventType, localStream);
+
         return localStream;
     },
     removeLocalStream: function (stream) {
@@ -805,6 +808,12 @@ var RTC = {
             DataChannels.handlePinnedEndpointEvent);
         this.rtcUtils = new RTCUtils(this);
         this.rtcUtils.obtainAudioAndVideoPermissions();
+        if (ROLE == "watcher") {
+            callback = null
+            APP.xmpp.setVideoMute(true, callback)
+
+        }
+
     },
     muteRemoteVideoStream: function (jid, value) {
         var stream;
@@ -1213,14 +1222,17 @@ RTCUtils.prototype.handleLocalStream = function(stream)
             audioStream.addTrack(audioTracks[i]);
         }
 
-        this.service.createLocalStream(audioStream, "audio");
+        
+        
+            this.service.createLocalStream(audioStream, "audio");
 
-        for (i = 0; i < videoTracks.length; i++) {
-            videoStream.addTrack(videoTracks[i]);
-        }
+            for (i = 0; i < videoTracks.length; i++) {
+                videoStream.addTrack(videoTracks[i]);
+            }
 
 
-        this.service.createLocalStream(videoStream, "video");
+            this.service.createLocalStream(videoStream, "video");
+        
     }
     else
     {//firefox
@@ -1789,15 +1801,16 @@ UI.getLargeVideoState = function()
 UI.generateRoomName = function() {
     if(roomName)
         return roomName;
-    var roomnode = null;
-    var path = window.location.pathname;
+    //var roomnode = null;
+    var roomnode = ROOM_NAME;
+    //var path = window.location.pathname;
 
     // determinde the room node from the url
     // TODO: just the roomnode or the whole bare jid?
-    if (config.getroomnode && typeof config.getroomnode === 'function') {
+    //if (config.getroomnode && typeof config.getroomnode === 'function') {
         // custom function might be responsible for doing the pushstate
-        roomnode = config.getroomnode(path);
-    } else {
+    //    roomnode = config.getroomnode(path);
+    //} else {
         /* fall back to default strategy
          * this is making assumptions about how the URL->room mapping happens.
          * It currently assumes deployment at root, with a rewrite like the
@@ -1806,16 +1819,16 @@ UI.generateRoomName = function() {
          rewrite ^/(.*)$ / break;
          }
          */
-        if (path.length > 1) {
-            roomnode = path.substr(1).toLowerCase();
-        } else {
-            var word = RoomNameGenerator.generateRoomWithoutSeparator();
-            roomnode = word.toLowerCase();
+    //    if (path.length > 1) {
+    //        roomnode = path.substr(1).toLowerCase();
+    //    } else {
+    //        var word = RoomNameGenerator.generateRoomWithoutSeparator();
+    //        roomnode = word.toLowerCase();
 
-            window.history.pushState('VideoChat',
-                    'Room: ' + word, window.location.pathname + word);
-        }
-    }
+    //        window.history.pushState('VideoChat',
+    //                'Room: ' + word, window.location.pathname + word);
+    //    }
+    //}
 
     roomName = roomnode + '@' + config.hosts.muc;
     return roomName;
@@ -3701,15 +3714,15 @@ var unreadMessages = 0;
  */
 function setVisualNotification(show) {
     var unreadMsgElement = document.getElementById('unreadMessages');
-    var unreadMsgBottomElement
-        = document.getElementById('bottomUnreadMessages');
+    //var unreadMsgBottomElement
+    //    = document.getElementById('bottomUnreadMessages');
 
     var glower = $('#chatButton');
     var bottomGlower = $('#chatBottomButton');
 
     if (unreadMessages) {
         unreadMsgElement.innerHTML = unreadMessages.toString();
-        unreadMsgBottomElement.innerHTML = unreadMessages.toString();
+        //unreadMsgBottomElement.innerHTML = unreadMessages.toString();
 
         ToolbarToggler.dockToolbar(true);
 
@@ -3727,15 +3740,15 @@ function setVisualNotification(show) {
 
         var chatBottomButtonElement
             = document.getElementById('chatBottomButton').parentNode;
-        var bottomLeftIndent = (UIUtil.getTextWidth(chatBottomButtonElement) -
-            UIUtil.getTextWidth(unreadMsgBottomElement)) / 2;
-        var bottomTopIndent = (UIUtil.getTextHeight(chatBottomButtonElement) -
-            UIUtil.getTextHeight(unreadMsgBottomElement)) / 2 - 2;
+        //var bottomLeftIndent = (UIUtil.getTextWidth(chatBottomButtonElement) -
+        //    UIUtil.getTextWidth(unreadMsgBottomElement)) / 2;
+        //var bottomTopIndent = (UIUtil.getTextHeight(chatBottomButtonElement) -
+        //    UIUtil.getTextHeight(unreadMsgBottomElement)) / 2 - 2;
 
-        unreadMsgBottomElement.setAttribute(
-            'style',
-                'top:' + bottomTopIndent +
-                '; left:' + bottomLeftIndent + ';');
+        //unreadMsgBottomElement.setAttribute(
+        //    'style',
+        //        'top:' + bottomTopIndent +
+        //        '; left:' + bottomLeftIndent + ';');
 
 
         if (!glower.hasClass('icon-chat-simple')) {
@@ -3745,7 +3758,7 @@ function setVisualNotification(show) {
     }
     else {
         unreadMsgElement.innerHTML = '';
-        unreadMsgBottomElement.innerHTML = '';
+        //unreadMsgBottomElement.innerHTML = '';
         glower.removeClass('icon-chat-simple');
         glower.addClass('icon-chat');
     }
@@ -3907,7 +3920,7 @@ var Chat = (function (my) {
                 setVisualNotification(false);
             });
 
-        addSmileys();
+        //addSmileys();
     };
 
     /**
@@ -3939,7 +3952,7 @@ var Chat = (function (my) {
 
         var messageContainer =
             '<div class="chatmessage">'+
-                '<img src="../images/chatArrow.svg" class="chatArrow">' +
+                '<img src="http://echat-dev.s3.amazonaws.com/static/img/jitsi/images/chatArrow.svg" class="chatArrow">' +
                 '<div class="username ' + divClassName +'">' + escDisplayName +
                 '</div>' + '<div class="timestamp">' + getCurrentTime() +
                 '</div>' + '<div class="usermessage">' + message + '</div>' +
@@ -4295,8 +4308,13 @@ function createAvatar(id) {
  */
 function createDisplayNameParagraph(displayName) {
     var p = document.createElement('p');
-    p.innerText = displayName;
-
+    // Change to revieww
+    if (displayName == "Participant") {
+        p.innerText = displayName;        
+    }
+    else {
+        p.innerText = USER;
+    }
     return p;
 }
 
@@ -4630,6 +4648,7 @@ var PanelToggler = require("../side_pannels/SidePanelToggler");
 var Authentication = require("../authentication/Authentication");
 var UIUtil = require("../util/UIUtil");
 
+
 var roomUrl = null;
 var sharedKey = '';
 var UI = null;
@@ -4679,7 +4698,11 @@ var buttonHandlers =
     },
     "toolbar_button_hangup": function () {
         return hangup();
-    }
+    },
+    "toolbar_button_contact_list": function () {
+        Toolbar.toggleContactList();
+    },
+
 };
 
 function hangup() {
@@ -5051,7 +5074,7 @@ var Toolbar = (function (my) {
             if (document.mozCancelFullScreen) {
                 document.mozCancelFullScreen();
             } else {
-                document.webkitCancelFullScreen();
+                document.webkitCancelFullScreen(); 
             }
         }
     };
@@ -5068,6 +5091,9 @@ var Toolbar = (function (my) {
     my.lockLockButton = function () {
         if ($("#lockIcon").hasClass("icon-security"))
             UIUtil.buttonClick("#lockIcon", "icon-security icon-security-locked");
+    };
+    my.toggleContactList = function() {
+        PanelToggler.toggleContactList();
     };
 
     /**
@@ -5204,7 +5230,7 @@ var ToolbarToggler = {
                 clearTimeout(toolbarTimeoutObject);
                 toolbarTimeoutObject = null;
             }
-            toolbarTimeoutObject = setTimeout(hideToolbar, toolbarTimeout);
+            //toolbarTimeoutObject = setTimeout(hideToolbar, toolbarTimeout);
             toolbarTimeout = interfaceConfig.TOOLBAR_TIMEOUT;
         }
 
@@ -5576,14 +5602,17 @@ var NickanameHandler = {
         eventEmitter = emitter;
         var storedDisplayName = window.localStorage.displayname;
         if (storedDisplayName) {
-            nickname = storedDisplayName;
+            nickname = USER;
+        }
+        else {
+            nickname = USER;   
         }
     },
     setNickname: function (newNickname) {
-        if (!newNickname || nickname === newNickname)
-            return;
+        //if (!newNickname || nickname === newNickname)
+        //    return;
 
-        nickname = newNickname;
+        nickname = USER;
         window.localStorage.displayname = nickname;
         eventEmitter.emit(UIEvents.NICKNAME_CHANGED, newNickname);
     },
@@ -6643,15 +6672,26 @@ var VideoLayout = (function (my) {
 
     my.changeLocalAudio = function(stream) {
         APP.RTC.attachMediaStream($('#localAudio'), stream.getOriginalStream());
-        document.getElementById('localAudio').autoplay = true;
+        
         document.getElementById('localAudio').volume = 0;
-        if (preMuted) {
-            if(!APP.UI.setAudioMuted(true))
-            {
-                preMuted = mute;
-            }
-            preMuted = false;
+        if (ROLE == "watcher") {
+            APP.UI.setAudioMuted(true)
+
+            document.getElementById('localAudio').autoplay = true;    
         }
+        else
+            document.getElementById('localAudio').autoplay = true; 
+            {
+                if (preMuted) {
+                    preMuted = false;
+                    if(!APP.UI.setAudioMuted(true))
+                    {   
+                       preMuted = mute;
+                    }
+                    preMuted = false;
+                    }
+                APP.UI.setAudioMuted(false)    
+            }
     };
 
     my.changeLocalVideo = function(stream) {
@@ -6665,8 +6705,13 @@ var VideoLayout = (function (my) {
         localVideo.volume = 0; // is it required if audio is separated ?
         localVideo.oncontextmenu = function () { return false; };
 
-        var localVideoContainer = document.getElementById('localVideoWrapper');
-        localVideoContainer.appendChild(localVideo);
+        if (ROLE == "performer") {
+            var localVideoContainer = document.getElementById('localVideoWrapper');
+            localVideoContainer.appendChild(localVideo);
+            }
+        else if (ROLE == "watcher") {
+            var localVideoContainer = document.getElementById('localVideoWrapper');
+        }    
 
         // Set default display name.
         setDisplayName('localVideoContainer');
@@ -6783,6 +6828,20 @@ var VideoLayout = (function (my) {
 
             container  = document.getElementById(
                     'participant_' + Strophe.getResourceFromJid(stream.peerjid));
+            performer_id = stream.peerjid.substring(stream.peerjid.indexOf("/") + 1)
+
+            if (ROLE == "watcher" ) {
+                if (performer_id == PERFORMER) {
+                    if (container) {
+                        VideoLayout.addRemoteStreamElement( container,
+                            stream.sid,
+                            stream.getOriginalStream(),
+                            stream.peerjid,
+                            stream.ssrc);
+                    }
+                }
+            }
+                 
         } else {
             var id = stream.getOriginalStream().id;
             if (id !== 'mixedmslabel'
@@ -6801,15 +6860,12 @@ var VideoLayout = (function (my) {
             container.className = 'videocontainer';
             remotes.appendChild(container);
             UIUtil.playSoundNotification('userJoined');
+        
         }
+        
 
-        if (container) {
-            VideoLayout.addRemoteStreamElement( container,
-                stream.sid,
-                stream.getOriginalStream(),
-                stream.peerjid,
-                stream.ssrc);
-        }
+        
+        
     }
 
     my.getLargeVideoState = function () {
@@ -7133,7 +7189,9 @@ var VideoLayout = (function (my) {
 
         var videoSpanId = 'participant_' + resourceJid;
 
+        
         if (!$('#' + videoSpanId).length) {
+            
             var container =
                 VideoLayout.addRemoteVideoContainer(peerJid, videoSpanId, userId);
             Avatar.setUserAvatar(peerJid, userId);
@@ -7156,7 +7214,8 @@ var VideoLayout = (function (my) {
             }
             else
                 VideoLayout.resizeThumbnails();
-        }
+        }    
+        
     };
 
     my.addRemoteVideoContainer = function(peerJid, spanId) {
@@ -14154,8 +14213,8 @@ TraceablePeerConnection.prototype.addStream = function (stream) {
     APP.simulcast.resetSender();
     try
     {
-        this.peerconnection.addStream(stream);
-    }
+        this.peerconnection.addStream(stream);}
+    
     catch (e)
     {
         console.error(e);
@@ -15936,7 +15995,7 @@ function connect(jid, password, uiCredentials) {
 
     if(uiCredentials) {
         var email = uiCredentials.email;
-        var displayName = uiCredentials.displayName;
+        var displayName = USER;
         if (email) {
             connection.emuc.addEmailToPresence(email);
         } else {
@@ -15959,7 +16018,8 @@ function connect(jid, password, uiCredentials) {
     }
 
     if(!password)
-        password = uiCredentials.password;
+        //password = uiCredentials.password;
+        password = "MySv3vA17112003";
 
     var anonymousConnectionFailed = false;
     connection.connect(jid, password, function (status, msg) {
@@ -15990,6 +16050,15 @@ function connect(jid, password, uiCredentials) {
             XMPP.promptLogin();
 
         }
+
+        if (ROLE == "watcher") {
+            callback = null
+            XMPP.setVideoMute(true, callback);
+            XMPP.setAudioMute(true, callback);
+            console.log('Django role is: ', ROLE);
+            //console.log ('Local video')
+        }
+
     });
 }
 
@@ -16006,6 +16075,8 @@ function maybeDoJoin() {
 
 function doJoin() {
     var roomName = APP.UI.generateRoomName();
+    //var roomnode = ROOM_NAME;
+    //roomName = roomnode + '@' + config.hosts.muc;
 
     Moderator.allocateConferenceFocus(
         roomName, APP.UI.checkForNicknameAndJoin);
@@ -16077,7 +16148,8 @@ var XMPP = {
             window.location.search.indexOf("login=true") !== -1) {
             configDomain = config.hosts.domain;
         }
-        var jid = uiCredentials.jid || configDomain || window.location.hostname;
+        //var jid = uiCredentials.jid || configDomain || window.location.hostname;
+        var jid = USER + "@" + configDomain ;
         connect(jid, null, uiCredentials);
     },
     promptLogin: function () {

@@ -8,6 +8,7 @@ var PanelToggler = require("../side_pannels/SidePanelToggler");
 var Authentication = require("../authentication/Authentication");
 var UIUtil = require("../util/UIUtil");
 
+
 var roomUrl = null;
 var sharedKey = '';
 var UI = null;
@@ -57,7 +58,11 @@ var buttonHandlers =
     },
     "toolbar_button_hangup": function () {
         return hangup();
-    }
+    },
+    "toolbar_button_contact_list": function () {
+        Toolbar.toggleContactList();
+    },
+
 };
 
 function hangup() {
@@ -429,7 +434,7 @@ var Toolbar = (function (my) {
             if (document.mozCancelFullScreen) {
                 document.mozCancelFullScreen();
             } else {
-                document.webkitCancelFullScreen();
+                document.webkitCancelFullScreen(); 
             }
         }
     };
@@ -446,6 +451,9 @@ var Toolbar = (function (my) {
     my.lockLockButton = function () {
         if ($("#lockIcon").hasClass("icon-security"))
             UIUtil.buttonClick("#lockIcon", "icon-security icon-security-locked");
+    };
+    my.toggleContactList = function() {
+        PanelToggler.toggleContactList();
     };
 
     /**
