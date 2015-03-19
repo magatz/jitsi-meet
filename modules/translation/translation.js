@@ -15,7 +15,7 @@ var defaultOptions = {
     useCookie: false,
     fallbackLng: DEFAULT_LANG,
     load: "unspecific",
-    resGetPath: 'lang/__ns__-__lng__.json',
+    resGetPath: STATIC_URL +'lang/__ns__-__lng__.json',
     ns: {
         namespaces: ['main', 'languages'],
         defaultNs: 'main'

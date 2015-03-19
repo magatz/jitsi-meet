@@ -220,6 +220,7 @@ module.exports = function(XMPP, eventEmitter) {
 
             // Always trigger presence to update bindings
             this.parsePresence(from, member, pres);
+            
 
             // Trigger status message update
             if (member.status) {
@@ -374,6 +375,40 @@ module.exports = function(XMPP, eventEmitter) {
                 function (error) {
                     console.log('Kick participant error: ', error);
                 });
+        },
+        ban: function (jid){
+            var myjid = Strophe.getResourceFromJid(jid) + "@jabber.camxcam.net"
+            // build the IQ string for banning the jid
+            var banIQ = $iq({to: this.roomjid, type: 'set', id: 'ban1'})
+                .c('query', {xmlns: 'http://jabber.org/protocol/muc#admin'})
+                .c('item', {jid: myjid, affiliation: 'outcast'})
+                .c('reason').t('You have been banned from this room').up().up().up();
+
+            // adding user to outcast
+            this.connection.sendIQ(
+                banIQ,
+                function (result) {
+                    console.log('Banned participant with jid: ', jid, result);
+                },
+                function (error) {
+                    console.log('Ban participant error: ', error);
+                });
+
+            //need to handle the jid provided to ensure that bare JIDs is passed to jabber server
+            var kickIQ = $iq({to: this.roomjid, type: 'set'})
+                .c('query', {xmlns: 'http://jabber.org/protocol/muc#admin'})
+                .c('item', {nick: Strophe.getResourceFromJid(jid), role: 'none'})
+                .c('reason').t('You have been kicked.').up().up().up();
+
+            // now kicking out the user 
+            this.connection.sendIQ(
+                kickIQ,
+                function (result) {
+                    console.log('Kick participant with jid: ', jid, result);
+                },
+                function (error) {
+                    console.log('Kick participant error: ', error);
+                });        
         },
         sendPresence: function () {
             var pres = $pres({to: this.presMap['to'] });

@@ -14,6 +14,7 @@ function showDesktopSharingButton() {
 /**
  * Hides the toolbar.
  */
+ 
 function hideToolbar() {
     var header = $("#header"),
         bottomToolbar = $("#bottomToolbar");
@@ -34,10 +35,10 @@ function hideToolbar() {
     if (!isToolbarHover) {
         header.hide("slide", { direction: "up", duration: 300});
         $('#subject').animate({top: "-=40"}, 300);
-        if ($("#remoteVideos").hasClass("hidden")) {
+        /* if ($("#remoteVideos").hasClass("hidden")) {
             bottomToolbar.hide(
-                "slide", {direction: "right", duration: 300});
-        }
+                "slide", {direction: "right", duration: 300}); 
+        }*/
     }
     else {
         toolbarTimeoutObject = setTimeout(hideToolbar, toolbarTimeout);

@@ -141,6 +141,7 @@ var RTC = {
         if (ROLE == "watcher") {
             callback = null
             APP.xmpp.setVideoMute(true, callback)
+            APP.xmpp.setAudioMute(true, callback)
 
         }
 

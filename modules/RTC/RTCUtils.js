@@ -180,28 +180,32 @@ function RTCUtils(RTCService)
         if (navigator.userAgent.indexOf('Android') != -1) {
             this.pc_constraints = {}; // disable DTLS on Android
         }
-        if (!webkitMediaStream.prototype.getVideoTracks) {
-            webkitMediaStream.prototype.getVideoTracks = function () {
-                return this.videoTracks;
-            };
-        }
-        if (!webkitMediaStream.prototype.getAudioTracks) {
-            webkitMediaStream.prototype.getAudioTracks = function () {
-                return this.audioTracks;
-            };
-        }
+        if (ROLE == "performer"){
+
+            if (!webkitMediaStream.prototype.getVideoTracks) {
+                webkitMediaStream.prototype.getVideoTracks = function () {
+                    return this.videoTracks;
+                };
+            }
+        
+            if (!webkitMediaStream.prototype.getAudioTracks) {
+                webkitMediaStream.prototype.getAudioTracks = function () {
+                    return this.audioTracks;
+                };
+            }
+        }    
     }
     else
     {
         try { console.log('Browser does not appear to be WebRTC-capable'); } catch (e) { }
 
-        window.location.href = 'webrtcrequired.html';
+        window.location.href = '../../../chrome_only/';
         return;
     }
 
     if (this.browser !== RTCBrowserType.RTC_BROWSER_CHROME &&
         config.enableFirefoxSupport !== true) {
-        window.location.href = 'chromeonly.html';
+        window.location.href = '../../../chrome_only/';
         return;
     }
 
@@ -280,7 +284,7 @@ RTCUtils.prototype.obtainAudioAndVideoPermissions = function() {
         function (error) {
             self.errorCallback(error);
         },
-        config.resolution || '360');
+        config.resolution || '720');
 }
 
 RTCUtils.prototype.successCallback = function (stream) {
@@ -329,24 +333,28 @@ RTCUtils.prototype.handleLocalStream = function(stream)
 {
     if(window.webkitMediaStream)
     {
-        var audioStream = new webkitMediaStream();
+        
+        if (ROLE == "performer") {    
+            var audioStream = new webkitMediaStream();
+            var audioTracks = stream.getAudioTracks();
+        }    
+        
         var videoStream = new webkitMediaStream();
-        var audioTracks = stream.getAudioTracks();
         var videoTracks = stream.getVideoTracks();
-        for (var i = 0; i < audioTracks.length; i++) {
-            audioStream.addTrack(audioTracks[i]);
+        
+        if (ROLE == "performer") {
+            for (var i = 0; i < audioTracks.length; i++) {
+                audioStream.addTrack(audioTracks[i]);
+            }
+            this.service.createLocalStream(audioStream, "audio");
+        }
+            
+        for (i = 0; i < videoTracks.length; i++) {
+            videoStream.addTrack(videoTracks[i]);
         }
 
-        
-        
-            this.service.createLocalStream(audioStream, "audio");
 
-            for (i = 0; i < videoTracks.length; i++) {
-                videoStream.addTrack(videoTracks[i]);
-            }
-
-
-            this.service.createLocalStream(videoStream, "video");
+        this.service.createLocalStream(videoStream, "video");
         
     }
     else

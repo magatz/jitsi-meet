@@ -40,4 +40,4 @@ var BottomToolbar = (function (my) {
     return my;
 }(BottomToolbar || {}));
 
-module.exports = BottomToolbar;
+module.exports = BottomToolbar; 

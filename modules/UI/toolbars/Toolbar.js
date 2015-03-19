@@ -34,6 +34,7 @@ var buttonHandlers =
         return Toolbar.openLinkDialog();
     },
     "toolbar_button_chat": function () {
+
         return BottomToolbar.toggleChat();
     },
     "toolbar_button_prezi": function () {
@@ -62,8 +63,10 @@ var buttonHandlers =
     "toolbar_button_contact_list": function () {
         Toolbar.toggleContactList();
     },
+    
 
 };
+
 
 function hangup() {
     APP.xmpp.disposeConference();
@@ -76,18 +79,20 @@ function hangup() {
         }, 10000);
 
     }
-
+    // here we need to call a WS to update room status to CLOSED
+    // on a new button called "Close Room"
     UI.messageHandler.openDialog(
         "Session Terminated",
-        "You hung up the call",
+        "You have closed the room",
         true,
-        { "Join again": true },
+        { "Confirm?": true },
         function(event, value, message, formVals)
         {
-            window.location.reload();
+            window.location.replace('../../rooms');
             return false;
         }
     );
+
 }
 
 /**
@@ -227,6 +232,13 @@ var Toolbar = (function (my) {
         for(var k in buttonHandlers)
             $("#" + k).click(buttonHandlers[k]);
         UI = ui;
+        
+        /*// magatz: after large video is displayed we hide the filmstrip
+        if (ROLE = "performer"){
+            console.info("Updated large video")
+            var filmstrip = $("#remoteVideos");
+            filmstrip.toggleClass("hidden");
+        }*/
     }
 
     /**

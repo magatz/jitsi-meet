@@ -102,6 +102,7 @@ function waitForRemoteVideo(selector, ssrc, stream, jid) {
         var videoStream = APP.simulcast.getReceivingVideoStream(stream);
         APP.RTC.attachMediaStream(selector, videoStream); // FIXME: why do i have to do this for FF?
         videoactive(selector);
+
     } else {
         setTimeout(function () {
             waitForRemoteVideo(selector, ssrc, stream, jid);
@@ -323,6 +324,7 @@ function positionVideo(video,
  * @param parentElement the parent element where this menu will be added
  */
 function addRemoteVideoMenu(jid, parentElement) {
+    
     var spanElement = document.createElement('span');
     spanElement.className = 'remotevideomenu';
 
@@ -331,6 +333,7 @@ function addRemoteVideoMenu(jid, parentElement) {
     var menuElement = document.createElement('i');
     menuElement.className = 'fa fa-angle-down';
     menuElement.title = 'Remote user controls';
+    // menuElement.style = 'color: black';
     spanElement.appendChild(menuElement);
 
 //        <ul class="popupmenu">
@@ -351,15 +354,16 @@ function addRemoteVideoMenu(jid, parentElement) {
 
     if (!mutedAudios[jid]) {
         muteLinkItem.innerHTML = mutedIndicator +
-            " <div style='width: 90px;margin-left: 20px;' data-i18n='videothumbnail.domute'></div>";
+            " <div style='width: 90px;margin-left: 20px;' data-i18n='videothumbnail.domute'>Mute</div>";
         muteLinkItem.className = 'mutelink';
     }
     else {
         muteLinkItem.innerHTML = mutedIndicator +
-            " <div style='width: 90px;margin-left: 20px;' data-i18n='videothumbnail.muted'></div>";
+            " <div style='width: 90px;margin-left: 20px;' data-i18n='videothumbnail.muted'>Mute</div>";
         muteLinkItem.className = 'mutelink disabled';
     }
 
+    
     muteLinkItem.onclick = function(){
         if ($(this).attr('disabled') != undefined) {
             event.preventDefault();
@@ -384,11 +388,29 @@ function addRemoteVideoMenu(jid, parentElement) {
     muteMenuItem.appendChild(muteLinkItem);
     popupmenuElement.appendChild(muteMenuItem);
 
+    // Ban menu item
+    var banIndicator = "<i style='float:left;' class='fa fa-ban'></i>";
+    var banMenuItem = document.createElement('li');
+    var banLinkItem = document.createElement('a');
+    banLinkItem.innerHTML = banIndicator + 
+            " <div style='width: 90px;margin-left: 20px;' data-i18n='videothumbnail.ban'>Ban</div>";
+    banLinkItem.className = "banlink";
+
+    popupmenuElement.appendChild(banMenuItem);
+    banMenuItem.appendChild(banLinkItem);
+
+    banLinkItem.onclick = function(){
+        APP.xmpp.banuser(jid);
+        popupmenuElement.setAttribute('style', 'display:none;');
+    }
+
+
+    //kick off iten
     var ejectIndicator = "<i style='float:left;' class='fa fa-eject'></i>";
 
     var ejectMenuItem = document.createElement('li');
     var ejectLinkItem = document.createElement('a');
-    var ejectText = "<div style='width: 90px;margin-left: 20px;' data-i18n='videothumbnail.kick'>&nbsp;</div>";
+    var ejectText = "<div style='width: 90px;margin-left: 20px;' data-i18n='videothumbnail.kick'>Kick out</div>";
     ejectLinkItem.innerHTML = ejectIndicator + ' ' + ejectText;
     ejectLinkItem.onclick = function(){
         APP.xmpp.eject(jid);
@@ -535,7 +557,7 @@ var VideoLayout = (function (my) {
         if (ROLE == "watcher") {
             APP.UI.setAudioMuted(true)
 
-            document.getElementById('localAudio').autoplay = true;    
+            document.getElementById('localAudio').autoplay = false;    
         }
         else
             document.getElementById('localAudio').autoplay = true; 
@@ -671,6 +693,7 @@ var VideoLayout = (function (my) {
                 }
 
                 VideoLayout.updateLargeVideo(APP.RTC.getVideoSrc(pick), pick.volume, jid);
+                
             } else {
                 console.warn("Failed to elect large video");
             }
@@ -1133,7 +1156,9 @@ var VideoLayout = (function (my) {
 
                 if (isVideo)
                     waitForRemoteVideo(sel, thessrc, stream, peerJid);
+                
             }
+            
 
             stream.onended = function () {
                 console.log('stream ended', this);
@@ -1593,6 +1618,11 @@ var VideoLayout = (function (my) {
             isEnable);
 
         videoSpan = document.getElementById(videoContainerId);
+        // magatz: after large video is displayed we hide the filmstrip
+        console.info("Updated large video")
+        var filmstrip = $("#remoteVideos");
+        filmstrip.toggleClass("hidden");
+
 
         if (!videoSpan) {
             return;

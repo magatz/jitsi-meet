@@ -53,6 +53,12 @@ module.exports = function (XMPP) {
             // We're not the focus, so can't terminate
             //connection.jingle.terminateRemoteByJid(jid, 'kick');
             this.connection.emuc.kick(jid);
+        },
+        // Andrea Magatti 19-03-2015
+        ban: function(jid){
+            this.connection.emuc.ban(jid);
+
         }
+
     });
 }

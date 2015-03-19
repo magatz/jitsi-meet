@@ -811,6 +811,7 @@ var RTC = {
         if (ROLE == "watcher") {
             callback = null
             APP.xmpp.setVideoMute(true, callback)
+            APP.xmpp.setAudioMute(true, callback)
 
         }
 
@@ -1065,28 +1066,32 @@ function RTCUtils(RTCService)
         if (navigator.userAgent.indexOf('Android') != -1) {
             this.pc_constraints = {}; // disable DTLS on Android
         }
-        if (!webkitMediaStream.prototype.getVideoTracks) {
-            webkitMediaStream.prototype.getVideoTracks = function () {
-                return this.videoTracks;
-            };
-        }
-        if (!webkitMediaStream.prototype.getAudioTracks) {
-            webkitMediaStream.prototype.getAudioTracks = function () {
-                return this.audioTracks;
-            };
-        }
+        if (ROLE == "performer"){
+
+            if (!webkitMediaStream.prototype.getVideoTracks) {
+                webkitMediaStream.prototype.getVideoTracks = function () {
+                    return this.videoTracks;
+                };
+            }
+        
+            if (!webkitMediaStream.prototype.getAudioTracks) {
+                webkitMediaStream.prototype.getAudioTracks = function () {
+                    return this.audioTracks;
+                };
+            }
+        }    
     }
     else
     {
         try { console.log('Browser does not appear to be WebRTC-capable'); } catch (e) { }
 
-        window.location.href = 'webrtcrequired.html';
+        window.location.href = '../../../chrome_only/';
         return;
     }
 
     if (this.browser !== RTCBrowserType.RTC_BROWSER_CHROME &&
         config.enableFirefoxSupport !== true) {
-        window.location.href = 'chromeonly.html';
+        window.location.href = '../../../chrome_only/';
         return;
     }
 
@@ -1165,7 +1170,7 @@ RTCUtils.prototype.obtainAudioAndVideoPermissions = function() {
         function (error) {
             self.errorCallback(error);
         },
-        config.resolution || '360');
+        config.resolution || '720');
 }
 
 RTCUtils.prototype.successCallback = function (stream) {
@@ -1214,24 +1219,28 @@ RTCUtils.prototype.handleLocalStream = function(stream)
 {
     if(window.webkitMediaStream)
     {
-        var audioStream = new webkitMediaStream();
+        
+        if (ROLE == "performer") {    
+            var audioStream = new webkitMediaStream();
+            var audioTracks = stream.getAudioTracks();
+        }    
+        
         var videoStream = new webkitMediaStream();
-        var audioTracks = stream.getAudioTracks();
         var videoTracks = stream.getVideoTracks();
-        for (var i = 0; i < audioTracks.length; i++) {
-            audioStream.addTrack(audioTracks[i]);
+        
+        if (ROLE == "performer") {
+            for (var i = 0; i < audioTracks.length; i++) {
+                audioStream.addTrack(audioTracks[i]);
+            }
+            this.service.createLocalStream(audioStream, "audio");
+        }
+            
+        for (i = 0; i < videoTracks.length; i++) {
+            videoStream.addTrack(videoTracks[i]);
         }
 
-        
-        
-            this.service.createLocalStream(audioStream, "audio");
 
-            for (i = 0; i < videoTracks.length; i++) {
-                videoStream.addTrack(videoTracks[i]);
-            }
-
-
-            this.service.createLocalStream(videoStream, "video");
+        this.service.createLocalStream(videoStream, "video");
         
     }
     else
@@ -2471,10 +2480,38 @@ function getGravatarUrl(id, size) {
     if(id === APP.xmpp.myJid() || !id) {
         id = Settings.getSettings().uid;
     }
-    return 'https://www.gravatar.com/avatar/' +
-        MD5.hexdigest(id.trim().toLowerCase()) +
-        "?d=wavatar&size=" + (size || "30");
+    //calling one service that return the avatar url
+    xmpp_name=id.substring(id.indexOf("/") + 1);
+
+    if (size){
+        the_url = STATIC_URL+"img/avatar.jpg"   
+    }
+    else {
+        the_url = STATIC_URL+"img/avatar-30.jpg"
+    }
+    
+    
+    return the_url;
 }
+
+function get_from_django(xmpp_name){
+    var get_url = document.location.host + "/avatar_url/" + xmpp_name;
+    console.info("Getting " + xmpp_name + " picture from: " + get_url );
+    var xmlhttp = new XMLHttpRequest();
+    
+    xmlhttp.onreadystatechange = function() {
+        if (xmlhttp.readyState == 4){
+            if (xmlhttp.status == 200){
+                var myArr = JSON.parse(xmlhttp.responseText);
+                callback(myArr.user_avatar_url);
+            }
+        }    
+    }
+    xmlhttp.open("GET", get_url, false);
+    xmlhttp.send();
+    return  "http://www.standardgsm.com/data/include/cms/olzdj/Arkusz2/Nokia-7110/4.jpg" ; 
+}
+
 
 var Avatar = {
 
@@ -3718,7 +3755,7 @@ function setVisualNotification(show) {
     //    = document.getElementById('bottomUnreadMessages');
 
     var glower = $('#chatButton');
-    var bottomGlower = $('#chatBottomButton');
+    //var bottomGlower = $('#chatBottomButton');
 
     if (unreadMessages) {
         unreadMsgElement.innerHTML = unreadMessages.toString();
@@ -3726,20 +3763,20 @@ function setVisualNotification(show) {
 
         ToolbarToggler.dockToolbar(true);
 
-        var chatButtonElement
-            = document.getElementById('chatButton').parentNode;
-        var leftIndent = (UIUtil.getTextWidth(chatButtonElement) -
-            UIUtil.getTextWidth(unreadMsgElement)) / 2;
-        var topIndent = (UIUtil.getTextHeight(chatButtonElement) -
-            UIUtil.getTextHeight(unreadMsgElement)) / 2 - 3;
+        //var chatButtonElement
+        //    = document.getElementById('chatButton').parentNode;
+        //var leftIndent = (UIUtil.getTextWidth(chatButtonElement) -
+        //    UIUtil.getTextWidth(unreadMsgElement)) / 2;
+        //var topIndent = (UIUtil.getTextHeight(chatButtonElement) -
+        //    UIUtil.getTextHeight(unreadMsgElement)) / 2 - 3;
 
-        unreadMsgElement.setAttribute(
-            'style',
-                'top:' + topIndent +
-                '; left:' + leftIndent + ';');
+        //unreadMsgElement.setAttribute(
+        //    'style',
+        //        'top:' + topIndent +
+        //        '; left:' + leftIndent + ';');
 
-        var chatBottomButtonElement
-            = document.getElementById('chatBottomButton').parentNode;
+        //var chatBottomButtonElement
+        //    = document.getElementById('chatBottomButton').parentNode;
         //var bottomLeftIndent = (UIUtil.getTextWidth(chatBottomButtonElement) -
         //    UIUtil.getTextWidth(unreadMsgBottomElement)) / 2;
         //var bottomTopIndent = (UIUtil.getTextHeight(chatBottomButtonElement) -
@@ -4635,7 +4672,7 @@ var BottomToolbar = (function (my) {
     return my;
 }(BottomToolbar || {}));
 
-module.exports = BottomToolbar;
+module.exports = BottomToolbar; 
 
 },{"../side_pannels/SidePanelToggler":16}],25:[function(require,module,exports){
 /* global $, buttonClick, config, lockRoom,
@@ -4674,6 +4711,7 @@ var buttonHandlers =
         return Toolbar.openLinkDialog();
     },
     "toolbar_button_chat": function () {
+
         return BottomToolbar.toggleChat();
     },
     "toolbar_button_prezi": function () {
@@ -4702,8 +4740,10 @@ var buttonHandlers =
     "toolbar_button_contact_list": function () {
         Toolbar.toggleContactList();
     },
+    
 
 };
+
 
 function hangup() {
     APP.xmpp.disposeConference();
@@ -4716,18 +4756,20 @@ function hangup() {
         }, 10000);
 
     }
-
+    // here we need to call a WS to update room status to CLOSED
+    // on a new button called "Close Room"
     UI.messageHandler.openDialog(
         "Session Terminated",
-        "You hung up the call",
+        "You have closed the room",
         true,
-        { "Join again": true },
+        { "Confirm?": true },
         function(event, value, message, formVals)
         {
-            window.location.reload();
+            window.location.replace('../../rooms');
             return false;
         }
     );
+
 }
 
 /**
@@ -4867,6 +4909,13 @@ var Toolbar = (function (my) {
         for(var k in buttonHandlers)
             $("#" + k).click(buttonHandlers[k]);
         UI = ui;
+        
+        /*// magatz: after large video is displayed we hide the filmstrip
+        if (ROLE = "performer"){
+            console.info("Updated large video")
+            var filmstrip = $("#remoteVideos");
+            filmstrip.toggleClass("hidden");
+        }*/
     }
 
     /**
@@ -5181,6 +5230,7 @@ function showDesktopSharingButton() {
 /**
  * Hides the toolbar.
  */
+ 
 function hideToolbar() {
     var header = $("#header"),
         bottomToolbar = $("#bottomToolbar");
@@ -5201,10 +5251,10 @@ function hideToolbar() {
     if (!isToolbarHover) {
         header.hide("slide", { direction: "up", duration: 300});
         $('#subject').animate({top: "-=40"}, 300);
-        if ($("#remoteVideos").hasClass("hidden")) {
+        /* if ($("#remoteVideos").hasClass("hidden")) {
             bottomToolbar.hide(
-                "slide", {direction: "right", duration: 300});
-        }
+                "slide", {direction: "right", duration: 300}); 
+        }*/
     }
     else {
         toolbarTimeoutObject = setTimeout(hideToolbar, toolbarTimeout);
@@ -6244,6 +6294,7 @@ function waitForRemoteVideo(selector, ssrc, stream, jid) {
         var videoStream = APP.simulcast.getReceivingVideoStream(stream);
         APP.RTC.attachMediaStream(selector, videoStream); // FIXME: why do i have to do this for FF?
         videoactive(selector);
+
     } else {
         setTimeout(function () {
             waitForRemoteVideo(selector, ssrc, stream, jid);
@@ -6465,6 +6516,7 @@ function positionVideo(video,
  * @param parentElement the parent element where this menu will be added
  */
 function addRemoteVideoMenu(jid, parentElement) {
+    
     var spanElement = document.createElement('span');
     spanElement.className = 'remotevideomenu';
 
@@ -6473,6 +6525,7 @@ function addRemoteVideoMenu(jid, parentElement) {
     var menuElement = document.createElement('i');
     menuElement.className = 'fa fa-angle-down';
     menuElement.title = 'Remote user controls';
+    // menuElement.style = 'color: black';
     spanElement.appendChild(menuElement);
 
 //        <ul class="popupmenu">
@@ -6493,15 +6546,16 @@ function addRemoteVideoMenu(jid, parentElement) {
 
     if (!mutedAudios[jid]) {
         muteLinkItem.innerHTML = mutedIndicator +
-            " <div style='width: 90px;margin-left: 20px;' data-i18n='videothumbnail.domute'></div>";
+            " <div style='width: 90px;margin-left: 20px;' data-i18n='videothumbnail.domute'>Mute</div>";
         muteLinkItem.className = 'mutelink';
     }
     else {
         muteLinkItem.innerHTML = mutedIndicator +
-            " <div style='width: 90px;margin-left: 20px;' data-i18n='videothumbnail.muted'></div>";
+            " <div style='width: 90px;margin-left: 20px;' data-i18n='videothumbnail.muted'>Mute</div>";
         muteLinkItem.className = 'mutelink disabled';
     }
 
+    
     muteLinkItem.onclick = function(){
         if ($(this).attr('disabled') != undefined) {
             event.preventDefault();
@@ -6526,11 +6580,29 @@ function addRemoteVideoMenu(jid, parentElement) {
     muteMenuItem.appendChild(muteLinkItem);
     popupmenuElement.appendChild(muteMenuItem);
 
+    // Ban menu item
+    var banIndicator = "<i style='float:left;' class='fa fa-ban'></i>";
+    var banMenuItem = document.createElement('li');
+    var banLinkItem = document.createElement('a');
+    banLinkItem.innerHTML = banIndicator + 
+            " <div style='width: 90px;margin-left: 20px;' data-i18n='videothumbnail.ban'>Ban</div>";
+    banLinkItem.className = "banlink";
+
+    popupmenuElement.appendChild(banMenuItem);
+    banMenuItem.appendChild(banLinkItem);
+
+    banLinkItem.onclick = function(){
+        APP.xmpp.banuser(jid);
+        popupmenuElement.setAttribute('style', 'display:none;');
+    }
+
+
+    //kick off iten
     var ejectIndicator = "<i style='float:left;' class='fa fa-eject'></i>";
 
     var ejectMenuItem = document.createElement('li');
     var ejectLinkItem = document.createElement('a');
-    var ejectText = "<div style='width: 90px;margin-left: 20px;' data-i18n='videothumbnail.kick'>&nbsp;</div>";
+    var ejectText = "<div style='width: 90px;margin-left: 20px;' data-i18n='videothumbnail.kick'>Kick out</div>";
     ejectLinkItem.innerHTML = ejectIndicator + ' ' + ejectText;
     ejectLinkItem.onclick = function(){
         APP.xmpp.eject(jid);
@@ -6677,7 +6749,7 @@ var VideoLayout = (function (my) {
         if (ROLE == "watcher") {
             APP.UI.setAudioMuted(true)
 
-            document.getElementById('localAudio').autoplay = true;    
+            document.getElementById('localAudio').autoplay = false;    
         }
         else
             document.getElementById('localAudio').autoplay = true; 
@@ -6813,6 +6885,7 @@ var VideoLayout = (function (my) {
                 }
 
                 VideoLayout.updateLargeVideo(APP.RTC.getVideoSrc(pick), pick.volume, jid);
+                
             } else {
                 console.warn("Failed to elect large video");
             }
@@ -7275,7 +7348,9 @@ var VideoLayout = (function (my) {
 
                 if (isVideo)
                     waitForRemoteVideo(sel, thessrc, stream, peerJid);
+                
             }
+            
 
             stream.onended = function () {
                 console.log('stream ended', this);
@@ -7735,6 +7810,11 @@ var VideoLayout = (function (my) {
             isEnable);
 
         videoSpan = document.getElementById(videoContainerId);
+        // magatz: after large video is displayed we hide the filmstrip
+        console.info("Updated large video")
+        var filmstrip = $("#remoteVideos");
+        filmstrip.toggleClass("hidden");
+
 
         if (!videoSpan) {
             return;
@@ -11463,7 +11543,7 @@ var defaultOptions = {
     useCookie: false,
     fallbackLng: DEFAULT_LANG,
     load: "unspecific",
-    resGetPath: 'lang/__ns__-__lng__.json',
+    resGetPath: STATIC_URL +'lang/__ns__-__lng__.json',
     ns: {
         namespaces: ['main', 'languages'],
         defaultNs: 'main'
@@ -15018,6 +15098,7 @@ module.exports = function(XMPP, eventEmitter) {
 
             // Always trigger presence to update bindings
             this.parsePresence(from, member, pres);
+            
 
             // Trigger status message update
             if (member.status) {
@@ -15172,6 +15253,40 @@ module.exports = function(XMPP, eventEmitter) {
                 function (error) {
                     console.log('Kick participant error: ', error);
                 });
+        },
+        ban: function (jid){
+            var myjid = Strophe.getResourceFromJid(jid) + "@jabber.camxcam.net"
+            // build the IQ string for banning the jid
+            var banIQ = $iq({to: this.roomjid, type: 'set', id: 'ban1'})
+                .c('query', {xmlns: 'http://jabber.org/protocol/muc#admin'})
+                .c('item', {jid: myjid, affiliation: 'outcast'})
+                .c('reason').t('You have been banned from this room').up().up().up();
+
+            // adding user to outcast
+            this.connection.sendIQ(
+                banIQ,
+                function (result) {
+                    console.log('Banned participant with jid: ', jid, result);
+                },
+                function (error) {
+                    console.log('Ban participant error: ', error);
+                });
+
+            //need to handle the jid provided to ensure that bare JIDs is passed to jabber server
+            var kickIQ = $iq({to: this.roomjid, type: 'set'})
+                .c('query', {xmlns: 'http://jabber.org/protocol/muc#admin'})
+                .c('item', {nick: Strophe.getResourceFromJid(jid), role: 'none'})
+                .c('reason').t('You have been kicked.').up().up().up();
+
+            // now kicking out the user 
+            this.connection.sendIQ(
+                kickIQ,
+                function (result) {
+                    console.log('Kick participant with jid: ', jid, result);
+                },
+                function (error) {
+                    console.log('Kick participant error: ', error);
+                });        
         },
         sendPresence: function () {
             var pres = $pres({to: this.presMap['to'] });
@@ -15828,7 +15943,13 @@ module.exports = function (XMPP) {
             // We're not the focus, so can't terminate
             //connection.jingle.terminateRemoteByJid(jid, 'kick');
             this.connection.emuc.kick(jid);
+        },
+        // Andrea Magatti 19-03-2015
+        ban: function(jid){
+            this.connection.emuc.ban(jid);
+
         }
+
     });
 }
 },{}],58:[function(require,module,exports){
@@ -16408,6 +16529,9 @@ var XMPP = {
     },
     eject: function (jid) {
         connection.moderate.eject(jid);
+    },
+    banuser: function (jid) {
+        connection.moderate.ban(jid);
     },
     findJidFromResource: function (resource) {
         return connection.emuc.findJidFromResource(resource);

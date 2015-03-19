@@ -434,6 +434,9 @@ var XMPP = {
     eject: function (jid) {
         connection.moderate.eject(jid);
     },
+    banuser: function (jid) {
+        connection.moderate.ban(jid);
+    },
     findJidFromResource: function (resource) {
         return connection.emuc.findJidFromResource(resource);
     },

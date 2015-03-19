@@ -20,7 +20,7 @@ function setVisualNotification(show) {
     //    = document.getElementById('bottomUnreadMessages');
 
     var glower = $('#chatButton');
-    var bottomGlower = $('#chatBottomButton');
+    //var bottomGlower = $('#chatBottomButton');
 
     if (unreadMessages) {
         unreadMsgElement.innerHTML = unreadMessages.toString();
@@ -28,20 +28,20 @@ function setVisualNotification(show) {
 
         ToolbarToggler.dockToolbar(true);
 
-        var chatButtonElement
-            = document.getElementById('chatButton').parentNode;
-        var leftIndent = (UIUtil.getTextWidth(chatButtonElement) -
-            UIUtil.getTextWidth(unreadMsgElement)) / 2;
-        var topIndent = (UIUtil.getTextHeight(chatButtonElement) -
-            UIUtil.getTextHeight(unreadMsgElement)) / 2 - 3;
+        //var chatButtonElement
+        //    = document.getElementById('chatButton').parentNode;
+        //var leftIndent = (UIUtil.getTextWidth(chatButtonElement) -
+        //    UIUtil.getTextWidth(unreadMsgElement)) / 2;
+        //var topIndent = (UIUtil.getTextHeight(chatButtonElement) -
+        //    UIUtil.getTextHeight(unreadMsgElement)) / 2 - 3;
 
-        unreadMsgElement.setAttribute(
-            'style',
-                'top:' + topIndent +
-                '; left:' + leftIndent + ';');
+        //unreadMsgElement.setAttribute(
+        //    'style',
+        //        'top:' + topIndent +
+        //        '; left:' + leftIndent + ';');
 
-        var chatBottomButtonElement
-            = document.getElementById('chatBottomButton').parentNode;
+        //var chatBottomButtonElement
+        //    = document.getElementById('chatBottomButton').parentNode;
         //var bottomLeftIndent = (UIUtil.getTextWidth(chatBottomButtonElement) -
         //    UIUtil.getTextWidth(unreadMsgBottomElement)) / 2;
         //var bottomTopIndent = (UIUtil.getTextHeight(chatBottomButtonElement) -
