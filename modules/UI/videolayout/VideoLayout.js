@@ -1618,10 +1618,12 @@ var VideoLayout = (function (my) {
             isEnable);
 
         videoSpan = document.getElementById(videoContainerId);
-        // magatz: after large video is displayed we hide the filmstrip
+        // magatz: after large video is displayed we hide the filmstrip and the infobanner
         console.info("Updated large video")
         var filmstrip = $("#remoteVideos");
+        var info_banner = $("#waitmessage");
         filmstrip.toggleClass("hidden");
+        info_banner.toggleClass("hidden");
 
 
         if (!videoSpan) {

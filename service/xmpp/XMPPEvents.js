@@ -4,6 +4,7 @@ var XMPPEvents = {
     CALL_INCOMING: "xmpp.callincoming.jingle",
     DISPOSE_CONFERENCE: "xmpp.dispoce_confernce",
     KICKED: "xmpp.kicked",
+    BANNED:"xmpp.banned",
     BRIDGE_DOWN: "xmpp.bridge_down",
     USER_ID_CHANGED: "xmpp.user_id_changed",
     CHANGED_STREAMS: "xmpp.changed_streams",
