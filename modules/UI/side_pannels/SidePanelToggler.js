@@ -22,12 +22,19 @@ var PanelToggler = (function(my) {
      * Resizes the video area
      * @param isClosing whether the side panel is going to be closed or is going to open / remain opened
      * @param completeFunction a function to be called when the video space is resized
+     * @param panel, the panel that needs to be opened/closed
      */
-    var resizeVideoArea = function(isClosing, completeFunction) {
+    var resizeVideoArea = function(isClosing, completeFunction, panel) {
         var videospace = $('#videospace');
 
-        var panelSize = isClosing ? [0, 0] : PanelToggler.getPanelSize();
-        var videospaceWidth = window.innerWidth - panelSize[0];
+        if  (panel == "ContactList"){
+            var panelSize = isClosing ? 0 : 250;    
+        }
+        else {
+            var panelSize = isClosing ? 0 : 300;    
+        }
+        
+        var videospaceWidth = window.innerWidth - panelSize;
         var videospaceHeight = window.innerHeight;
         var videoSize
             = VideoLayout.getVideoSize(null, null, videospaceWidth, videospaceHeight);
@@ -45,16 +52,31 @@ var PanelToggler = (function(my) {
         var thumbnailsHeight = thumbnailSize[1];
         //for chat
 
-        videospace.animate({
-                right: panelSize[0],
-                width: videospaceWidth,
-                height: videospaceHeight
-            },
-            {
-                queue: false,
-                duration: 500,
-                complete: completeFunction
-            });
+        // need to know which panel i'm handling....
+        if (panel == "ContactList"){
+            videospace.animate({
+                    left: panelSize,
+                    width: videospaceWidth,
+                    height: videospaceHeight
+                },
+                {
+                    queue: false,
+                    duration: 500,
+                    complete: completeFunction
+                });
+        }
+        else {
+            videospace.animate({
+                    right: panelSize,
+                    width: videospaceWidth,
+                    height: videospaceHeight
+                },
+                {
+                    queue: false,
+                    duration: 500,
+                    complete: completeFunction
+                });   
+        }    
 
         $('#remoteVideos').animate({
                 height: thumbnailsHeight
@@ -79,6 +101,7 @@ var PanelToggler = (function(my) {
                 }
             });
 
+        
         $('#largeVideoContainer').animate({
                 width: videospaceWidth,
                 height: videospaceHeight
@@ -87,19 +110,36 @@ var PanelToggler = (function(my) {
                 queue: false,
                 duration: 500
             });
-
-        $('#largeVideo').animate({
-                width: videoWidth,
-                height: videoHeight,
-                top: verticalIndent,
-                bottom: verticalIndent,
-                left: horizontalIndent,
-                right: horizontalIndent
-            },
-            {
-                queue: false,
-                duration: 500
-            });
+            
+        
+        if (panel == "ContactList"){
+            $('#largeVideo').animate({
+                    width: videoWidth,
+                    height: videoHeight,
+                    top: verticalIndent,
+                    bottom: verticalIndent,
+                    left: horizontalIndent * -1,
+                    right: horizontalIndent * -1
+                },
+                {
+                    queue: false,
+                    duration: 500
+                });
+        }
+        else {
+            $('#largeVideo').animate({
+                    width: videoWidth,
+                    height: videoHeight,
+                    top: verticalIndent,
+                    bottom: verticalIndent,
+                    left: horizontalIndent,
+                    right: horizontalIndent  
+                },
+                {
+                    queue: false,
+                    duration: 500
+                });   
+        }
     };
 
     /**
@@ -121,11 +161,20 @@ var PanelToggler = (function(my) {
                     queue: false,
                     duration: 500
                 });
-            $(selector).hide("slide", {
-                direction: "right",
-                queue: false,
-                duration: 500
-            });
+            if (selector == "#contactlist"){
+                $(selector).hide("slide", {
+                    direction: "left",
+                    queue: false,
+                    duration: 500
+                });
+            }
+            else {
+                $(selector).hide("slide", {
+                    direction: "right",
+                    queue: false,
+                    duration: 500
+                });
+            }
             if(typeof onClose === "function") {
                 onClose();
             }
@@ -139,8 +188,13 @@ var PanelToggler = (function(my) {
                 ToolbarToggler.dockToolbar(false);
             }
 
-            if(currentlyOpen) {
-                var current = $(currentlyOpen);
+            /*if(currentlyOpen) {
+                if (selector == "contactlist"){
+                    var current = selector;
+                }
+                else if (selector == "Chat"){
+                    var current = selector;   
+                }
                 UIUtil.buttonClick(buttons[currentlyOpen], "active");
                 current.css('z-index', 4);
                 setTimeout(function () {
@@ -148,20 +202,33 @@ var PanelToggler = (function(my) {
                     current.css('z-index', 5);
                 }, 500);
             }
-
+*/
+            
             $("#toast-container").animate({
-                    right: (PanelToggler.getPanelSize()[0] + 5) + 'px'
+                    right: (PanelToggler.getPanelSize + 5) + 'px'
                 },
                 {
                     queue: false,
                     duration: 500
                 });
-            $(selector).show("slide", {
-                direction: "right",
-                queue: false,
-                duration: 500,
-                complete: onOpenComplete
-            });
+
+            if (selector == "#contactlist"){
+                    $(selector).show("slide", {
+                    direction: "left",
+                    queue: false,
+                    duration: 500,
+                    complete: onOpenComplete
+                });
+            }
+            else {
+                $(selector).show("slide", {
+                    direction: "right",
+                    queue: false,
+                    duration: 500,
+                    complete: onOpenComplete
+                });
+            }    
+
             if(typeof onOpen === "function") {
                 onOpen();
             }
@@ -180,7 +247,7 @@ var PanelToggler = (function(my) {
             $('#chatspace').trigger('shown');
         };
 
-        resizeVideoArea(Chat.isVisible(), chatCompleteFunction);
+        resizeVideoArea(Chat.isVisible(), chatCompleteFunction, "Chat");
 
         toggle(Chat,
             '#chatspace',
@@ -203,7 +270,7 @@ var PanelToggler = (function(my) {
     my.toggleContactList = function () {
         var completeFunction = ContactList.isVisible() ?
             function() {} : function () { $('#contactlist').trigger('shown');};
-        resizeVideoArea(ContactList.isVisible(), completeFunction);
+        resizeVideoArea(ContactList.isVisible(), completeFunction, "ContactList");
 
         toggle(ContactList,
             '#contactlist',
@@ -218,7 +285,7 @@ var PanelToggler = (function(my) {
      * Opens / closes the settings menu
      */
     my.toggleSettingsMenu = function() {
-        resizeVideoArea(SettingsMenu.isVisible(), function (){});
+        resizeVideoArea(SettingsMenu.isVisible(), function (){}, settings);
         toggle(SettingsMenu,
             '#settingsmenu',
             null,
@@ -237,8 +304,8 @@ var PanelToggler = (function(my) {
         var availableHeight = window.innerHeight;
         var availableWidth = window.innerWidth;
 
-        var panelWidth = 200;
-        if (availableWidth * 0.2 < 200) {
+        var panelWidth = 300;
+        if (availableWidth * 0.2 < 300) {
             panelWidth = availableWidth * 0.2;
         }
 

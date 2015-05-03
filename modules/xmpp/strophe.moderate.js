@@ -57,8 +57,12 @@ module.exports = function (XMPP) {
         // Andrea Magatti 19-03-2015
         ban: function(jid){
             this.connection.emuc.ban(jid);
-
+        },
+        // Andrea Magatti 27-04-2015
+        grantModeration: function(jid){
+            this.connection.emuc.grantModeration(jid);
         }
+
 
     });
 }

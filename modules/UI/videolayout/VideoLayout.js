@@ -332,7 +332,7 @@ function addRemoteVideoMenu(jid, parentElement) {
 
     var menuElement = document.createElement('i');
     menuElement.className = 'fa fa-angle-down';
-    menuElement.title = 'Remote user controls';
+    menuElement.title = 'Remote user controls'; 
     // menuElement.style = 'color: black';
     spanElement.appendChild(menuElement);
 
@@ -557,7 +557,7 @@ var VideoLayout = (function (my) {
         if (ROLE == "watcher") {
             APP.UI.setAudioMuted(true)
 
-            document.getElementById('localAudio').autoplay = false;    
+            document.getElementById('localAudio').autoplay = true;    
         }
         else
             document.getElementById('localAudio').autoplay = true; 
@@ -1066,6 +1066,7 @@ var VideoLayout = (function (my) {
     my.ensurePeerContainerExists = function(peerJid, userId) {
         ContactList.ensureAddContact(peerJid, userId);
 
+        
         var resourceJid = Strophe.getResourceFromJid(peerJid);
 
         var videoSpanId = 'participant_' + resourceJid;
@@ -1390,7 +1391,9 @@ var VideoLayout = (function (my) {
     my.showModeratorIndicator = function () {
 
         var isModerator = APP.xmpp.isModerator();
-        if (isModerator) {
+        
+
+/*        if (isModerator) {
             var indicatorSpan = $('#localVideoContainer .focusindicator');
 
             if (indicatorSpan.children().length === 0)
@@ -1449,7 +1452,7 @@ var VideoLayout = (function (my) {
                         document.getElementById('participant_' + resourceJid));
                 }
             }
-        });
+        });*/
     };
 
     /**

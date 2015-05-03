@@ -139,6 +139,37 @@ function registerListeners() {
         messageHandler.openMessageDialog("Session Terminated",
             "Ouch! You have been kicked out of the meet!");
     });
+    APP.xmpp.addListener(XMPPEvents.BANNED, function () {
+        messageHandler.openMessageDialog("Session Terminated",
+            "You have been banned from this room! Only the performer or Admin can revoke this banning. Please contact us for any complaint");
+            
+    });
+    
+    APP.xmpp.addListener(XMPPEvents.MUC_DESTROYED, function (reason) {
+        //FIXME: use Session Terminated from translation, but
+        // 'reason' text comes from XMPP packet and is not translated
+       
+       if (ROLE != 'watcher') {
+        reason = "The show is terminated, any user has been notified. Thank you!"
+       }
+        messageHandler.openDialog(
+            "Session Terminated",
+             reason,
+            true,
+            {'Go back to opened rooms': true},
+            function (event, value, message, formVals)
+            {
+                if (ROLE = "watcher"){
+                    window.location.pathname = "../../hot/";
+                }
+                else {
+                    window.location.pathname = "../../hot/rooms/";    
+                }
+                return false;
+            }
+        );
+    });
+
     APP.xmpp.addListener(XMPPEvents.BRIDGE_DOWN, function () {
         messageHandler.showError("Error",
             "Jitsi Videobridge is currently unavailable. Please try again later!");
@@ -179,6 +210,8 @@ function registerListeners() {
     APP.xmpp.addListener(XMPPEvents.CHAT_ERROR_RECEIVED, chatAddError);
     APP.xmpp.addListener(XMPPEvents.ETHERPAD, initEtherpad);
     APP.xmpp.addListener(XMPPEvents.AUTHENTICATION_REQUIRED, onAuthenticationRequired);
+    APP.xmpp.addListener(XMPPEvents.TIP_GIVEN, onTipGiven);
+    APP.xmpp.addListener(XMPPEvents.GRANTED_MODERATION, onDirectModerationGranted);
 
 
 }
@@ -366,6 +399,7 @@ function onMucJoined(jid, info) {
 
     var settings = Settings.getSettings();
     // Add myself to the contact list.
+    // need to get balance for specific jid from django ws
     ContactList.addContact(jid, settings.email || settings.uid);
 
     // Once we've joined the muc show the toolbar
@@ -483,10 +517,71 @@ function onMucPresenceStatus( jid, info) {
             'participant_' + Strophe.getResourceFromJid(jid), info.status);
 }
 
+function onTipGiven(jid, nick, amount, balance){
+    // on tip message we make:
+    // call the REST API via GET to obtain the new total
+    // visually increment the tip counter on the toolbar using that value
+    var instance_url = "/roominstances/" + ROOM_INSTANCE
+    $.getJSON(instance_url, function(result){
+        var actual = parseFloat(result.credits);
+        var this_user_btn = '#val-' + Strophe.getResourceFromJid(jid);
+        var performer_user_btn = '#val-' + PERFORMER;
+        var performer_actual = parseFloat($(performer_user_btn).text());
+        $('#TotalTips').text(actual.toString());
+        $(this_user_btn).text(balance);
+        $(performer_user_btn).text(performer_actual + parseFloat(amount));
+        if (ROLE = "performer"){
+            UIUtil.playSoundNotification('cashIncoming');
+        }
+    });
+    // then i need to update any value on Contact List (if is Visible)
+    
+}
+
+function onDirectModerationGranted(from, jid, displayName, role){
+    // questa funzione deve:
+    // 1.aprire la lista degli utenti al numvo mod
+    // 2.aggiornare la lista mettendo la stella al nuovo mod.
+    
+    if (displayName == USER && role == "moderator") {
+        // react only if the elected user is the current user showing the contactList
+        if (!ContactList.isVisible()){    
+            Toolbar.toggleContactList();
+            UIUtil.playSoundNotification('grantedModeration');
+            
+        }
+    }    
+    
+
+    // the contactlist has been built,we will change for anyone, the appearance of the button
+    // using a gliph star for the new moderator
+    
+    var userBtn = document.getElementById( "openModal-" + displayName );
+    var performerBtn  = document.getElementById("openModal-" + PERFORMER );
+    
+    if (userBtn != performerBtn){        
+        if (userBtn) {
+            var userGliph = document.createElement('span');
+            userGliph.className = "glyphicon glyphicon-star pull-left";
+            userGliph.id = "moderator-" + displayName;
+            userBtn.appendChild(userGliph);
+        }
+    }
+}    
+    
+            
 function onMucRoleChanged(role, displayName) {
     VideoLayout.showModeratorIndicator();
 
     if (role === 'moderator') {
+        
+        var userBtn = document.getElementById( "openModal-" + displayName );
+        if (userBtn) {
+            var userGliph = document.createElement('span');
+            userGliph.className = "glyphicon glyphicon-star pull-left";
+            userGliph.id = "moderator-" + displayName;
+            userBtn.appendChild(userGliph);
+        }    
         var messageKey, messageOptions = {};
         var lDisplayName = displayName;
         if (!lDisplayName) {

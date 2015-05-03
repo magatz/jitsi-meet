@@ -419,6 +419,12 @@ var XMPP = {
     sendChatMessage: function (message, nickname) {
         connection.emuc.sendMessage(message, nickname);
     },
+
+    sendTipMessage: function (message, nickname, amount, balance) {
+        connection.emuc.sendMessage(message, nickname, amount, balance);
+    },
+
+
     setSubject: function (topic) {
         connection.emuc.setSubject(topic);
     },
@@ -434,8 +440,17 @@ var XMPP = {
     eject: function (jid) {
         connection.moderate.eject(jid);
     },
+    logout: function (callback) {
+        Moderator.logout(callback);
+    },
     banuser: function (jid) {
         connection.moderate.ban(jid);
+    },
+    grantModeration: function(jid) {
+        connection.moderate.grantModeration(jid);
+    },
+    destroyRoom: function() {
+        connection.emuc.destroyRoom();
     },
     findJidFromResource: function (resource) {
         return connection.emuc.findJidFromResource(resource);

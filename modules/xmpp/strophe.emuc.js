@@ -181,6 +181,12 @@ module.exports = function(XMPP, eventEmitter) {
                 if (member.affiliation == 'owner') this.isOwner = true;
                 if (this.role !== member.role) {
                     this.role = member.role;
+                    // Andrea Magatti 
+                    // here we come when a direct election to moderator !
+                    // devo lanciare un nuovo evento, che faccia aprire la lista
+                    // degli utenti al nuovo moderatore
+                    eventEmitter.emit(XMPPEvents.GRANTED_MODERATION, 
+                        from, member.jid, member.displayName, member.role);
 
                     eventEmitter.emit(XMPPEvents.LOCALROLE_CHANGED,
                         from, member, pres, Moderator.isModerator(),
@@ -206,6 +212,7 @@ module.exports = function(XMPP, eventEmitter) {
                     if (email.length > 0) {
                         id = email.text();
                     }
+                    
                     eventEmitter.emit(XMPPEvents.MUC_ENTER, from, id, member.displayName);
                 }
             } else {
@@ -231,6 +238,20 @@ module.exports = function(XMPP, eventEmitter) {
         },
         onPresenceUnavailable: function (pres) {
             var from = pres.getAttribute('from');
+            // room destroyed ?
+            if ($(pres).find('>x[xmlns="http://jabber.org/protocol/muc#user"]' +
+                             '>destroy').length) {
+                var reason;
+                var reasonSelect = $(pres).find(
+                    '>x[xmlns="http://jabber.org/protocol/muc#user"]' +
+                    '>destroy>reason');
+                if (reasonSelect.length) {
+                    reason = reasonSelect.text();
+                }
+                XMPP.disposeConference(false);
+                eventEmitter.emit(XMPPEvents.MUC_DESTROYED, reason);
+                return true;
+            }
             // Status code 110 indicates that this notification is "self-presence".
             if (!$(pres).find('>x[xmlns="http://jabber.org/protocol/muc#user"]>status[code="110"]').length) {
                 delete this.members[from];
@@ -252,6 +273,14 @@ module.exports = function(XMPP, eventEmitter) {
                 if (this.myroomjid === from) {
                     XMPP.disposeConference(false);
                     eventEmitter.emit(XMPPEvents.KICKED);
+                }
+            }
+            
+            if ($(pres).find('>x[xmlns="http://jabber.org/protocol/muc#user"]>status[code="301"]').length) {
+                $(document).trigger('banned.muc', [from]);
+                if (this.myroomjid === from) {
+                    XMPP.disposeConference(false);
+                    eventEmitter.emit(XMPPEvents.BANNED);
                 }
             }
             return true;
@@ -292,12 +321,15 @@ module.exports = function(XMPP, eventEmitter) {
             }
             return true;
         },
-        sendMessage: function (body, nickname) {
-            var msg = $msg({to: this.roomjid, type: 'groupchat'});
+        sendMessage: function (body, nickname, amount, balance) {
+            // try to send a custom value in the message
+            // Andrea Magatti 28-04-2015
+            var msg = $msg({to: this.roomjid, type: 'groupchat', balance: balance, amount: amount});
             msg.c('body', body).up();
             if (nickname) {
                 msg.c('nick', {xmlns: 'http://jabber.org/protocol/nick'}).t(nickname).up().up();
             }
+                       
             this.connection.send(msg);
             eventEmitter.emit(XMPPEvents.SENDING_CHAT_MESSAGE, body);
         },
@@ -332,11 +364,25 @@ module.exports = function(XMPP, eventEmitter) {
                 }
             }
 
-
+            // need to check txt to get if a tip message is sent
+            // and theb: eventEmitter.emit(XMPPEvents.TIP_GIVEN, USER, item_price );
             if (txt) {
-                console.log('chat', nick, txt);
-                eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
-                    from, nick, txt, this.myroomjid);
+                
+                var amount = msg.getAttribute('amount');
+                var balance = msg.getAttribute('balance');
+                // event to capture the tipping action sent via message
+                if (balance != "undefined" || amount != "undefined") {
+                    eventEmitter.emit(XMPPEvents.TIP_GIVEN,
+                        from, nick, amount, balance);
+                    console.log('chat', nick, txt);
+                    eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
+                        from, nick, txt, this.myroomjid);
+                }
+                else {
+                    console.log('chat', nick, txt);
+                    eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
+                        from, nick, txt, this.myroomjid);
+                }
             }
             return true;
         },
@@ -373,11 +419,11 @@ module.exports = function(XMPP, eventEmitter) {
                     console.log('Kick participant with jid: ', jid, result);
                 },
                 function (error) {
-                    console.log('Kick participant error: ', error);
+                    console.log('Kick participant error: ', jid, error);
                 });
         },
         ban: function (jid){
-            var myjid = Strophe.getResourceFromJid(jid) + "@jabber.camxcam.net"
+            var myjid = Strophe.getResourceFromJid(jid) + "@" + config.hosts.domain;
             // build the IQ string for banning the jid
             var banIQ = $iq({to: this.roomjid, type: 'set', id: 'ban1'})
                 .c('query', {xmlns: 'http://jabber.org/protocol/muc#admin'})
@@ -410,6 +456,60 @@ module.exports = function(XMPP, eventEmitter) {
                     console.log('Kick participant error: ', error);
                 });        
         },
+
+        grantModeration: function (jid){
+            var grantIQ = $iq({to: this.roomjid, type: 'set', id: "grantModeration"})
+                .c('query', {xmlns: 'http://jabber.org/protocol/muc#admin'})
+                .c('item', {nick: Strophe.getResourceFromJid(jid), role: 'moderator'})
+                .c('reason').t('Nice! You now are a Moderator').up().up().up();
+
+            this.connection.sendIQ(
+                grantIQ,
+                function (result) {
+                    console.log('Granting Moderator Status participant with jid: ', jid, result);
+                },
+                function (error) {
+                    console.log(' No granting moderator Status to participant. Error: ', error);
+                });
+
+            var ownerIQ = $iq({to: this.roomjid, type: 'set', id: "grantOwnership"})
+                .c('query', {xmlns: 'http://jabber.org/protocol/muc#admin'})
+                .c('item', {nick: Strophe.getResourceFromJid(jid), affiliation: 'owner'})
+                .c('reason').t('Nice! You are now an Owner').up().up().up();
+
+            this.connection.sendIQ(
+                ownerIQ,
+                function (result) {
+                    console.log('Granting Owner Status participant with jid: ', jid, result);
+                },
+                function (error) {
+                    console.log(' Not granting ownership to participant. Error: ', error);
+                });    
+
+        },
+
+        destroyRoom: function (jid) {
+             var destroyIQ = $iq({to: this.roomjid, type: 'set'})
+                .c('query', {xmlns: 'http://jabber.org/protocol/muc#owner'})
+                .c('destroy', {jid: this.roomjid})
+                .c('reason').t('The show is finished, I\'m leaving! See you soon!').up().up().up();
+                
+
+            this.connection.sendIQ(
+                destroyIQ,
+                function (result) {
+                    console.log('destroyed room with jid: ', jid, result);
+                },
+                function (error) {
+                    console.log('Error in destroying room: ', jid, error);
+                });
+
+        },
+
+        onModerationGranted: function (jid) {
+
+        },
+
         sendPresence: function () {
             var pres = $pres({to: this.presMap['to'] });
             pres.c('x', {xmlns: this.presMap['xns']});

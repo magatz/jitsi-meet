@@ -63,13 +63,589 @@ var buttonHandlers =
     "toolbar_button_contact_list": function () {
         Toolbar.toggleContactList();
     },
-    
+    "toolbar_button_room_tip": function (event) {
+        event.preventDefault();
+        return give_tip();
+    },
+    "toolbar_button_target": function (event) {
+        event.preventDefault();
+        return def_target();
+    },
+    "toolbar_button_show_target": function (event) {
+            return show_targets();
+    },
+    "toolbar_button_logout": function () {
+        // Ask for confirmation
+        messageHandler.openTwoButtonDialog(
+            "dialog.logoutTitle",
+            null,
+            "dialog.logoutQuestion",
+            null,
+            false,
+            "dialog.Yes",
+            function (evt, yes) {
+                if (yes) {
+                    APP.xmpp.logout(function (url) {
+                        if (url) {
+                            window.location.href = url;
+                        } else {
+                            hangup();
+                        }
+                    });
+                }
+            });
+    }
+
 
 };
 
+function show_targets(){
+        
+    // build and show an dismissible alert with
+    // actual targets
+    
+    get_url = "/roominstances/" + ROOM_INSTANCE;
+
+    $.getJSON(get_url, function(result){
+        val1 = result.A_target_amount;
+        val2 = result.B_target_amount;
+        val3 = result.C_target_amount;
+
+        msg1 = "At: " + result.A_target_amount + ": " + result.A_target_desc + ";" + '\n';
+        msg2 = "At: " + result.B_target_amount + ": " + result.B_target_desc + ";" + '\n';
+        msg3 = "At: " + result.C_target_amount + ": " + result.C_target_desc + ";" + '\n';
+        
+        if (val3 != null && val2 != null && val1 != null) {
+            target_msg = msg1 + msg2 + msg3;
+            target_msg_ok = "NUOVI OBIETTIVI !!!!" + '\n' + target_msg;
+        }
+       
+        else if ( val2 == null && val3 == null){
+            target_msg =  msg1;
+            target_msg_ok = "NUOVI OBIETTIVI !!!!" + '\n' + target_msg;
+        }
+        else if (val1 == null && val2 == null && val3 == null){
+            target_msg_ok = "Obiettivi non ancora definiti" 
+        }
+
+        else if ( val3 == null){
+            target_msg = msg1 + msg2;
+            target_msg_ok = "NUOVI OBIETTIVI !!!!" + '\n' + target_msg;
+        }
+                
+        
+        //var largeVideo = $('#videospace');
+        var dismissDiv = document.createElement('div');
+        dismissDiv.id = "targets"
+        dismissDiv.setAttribute("class", "alert alert-info");
+        dismissDiv.setAttribute("role", "alert");
+
+        var mybtn = document.createElement('button');
+        mybtn.setAttribute("class", "close");
+        mybtn.setAttribute("data-dismiss", "alert");
+        
+        var closeBtn = document.createElement('span');
+        closeBtn.innerText = 'Close';
+        dismissDiv.innerText = target_msg_ok;
+        mybtn.appendChild(closeBtn);
+        dismissDiv.appendChild(mybtn);
+
+        document.getElementById("videospace").appendChild(dismissDiv);
+    
+    });
+    $("#targets").show();    
+
+}
+
+
+
+
+function def_target() {
+    // Tasks:
+    // Create modal with form and submit button
+    // Submit Ajax PATCH to REST API /roominstances/ROOM_INSTANCE
+    // Send message to groupchat with description and target level
+    createModal();
+
+}
+
+function createModal(){
+    if (document.getElementById("targetModal")){
+        
+    }
+    else {    
+            //building the modal dialog only if not existing
+
+            var mymodal = document.createElement('div');
+            mymodal.className="modal fade";
+            mymodal.id = "targetModal";
+            mymodal.setAttribute("tabindex", "-1");
+            mymodal.setAttribute("role", "dialog");
+            
+            var modalDialog = document.createElement('div');
+            modalDialog.className= "modal-dialog modal-lg"
+            
+            var modalContent =document.createElement('div');
+            modalContent.className= "modal-content";
+            modalContent.id ="addElem";
+            
+
+            var modalHeader = document.createElement('div');
+            modalHeader.className="modal-header";
+            
+            var headerButton = document.createElement('button');
+            headerButton.className="close";
+            headerButton.setAttribute("type", "button");
+            headerButton.setAttribute("data-dismiss", "modal");
+            headerButton.innerHTML = "&times;";
+            modalHeader.appendChild(headerButton);
+
+            var headerTitle=document.createElement('h4');
+            headerTitle.className = "modal-title";
+            headerTitle.id = "myModalLabel";
+            headerTitle.innerText="Target definition"
+            modalHeader.appendChild(headerTitle);
+                   
+
+            var modalBody=document.createElement('div');
+            modalBody.className="modal-body";
+            
+            var bodyFormClass = document.createElement('form');
+            bodyFormClass.setAttribute("class", "form-horizontal");
+            modalBody.appendChild(bodyFormClass);
+            
+            // first target Description
+            var bodyFormGroup = document.createElement('div');
+            bodyFormGroup.setAttribute("class", "form-group");
+            bodyFormClass.appendChild(bodyFormGroup)
+            
+            var bodylabelDesc1 = document.createElement('label');
+            bodylabelDesc1.setAttribute("class", "col-sm-2 control-label");
+            bodylabelDesc1.setAttribute("for", "inputDescTarget1");
+            bodylabelDesc1.innerText = "Text of target #1"
+            bodyFormGroup.appendChild(bodylabelDesc1)
+
+            var bodyDivInputDesc1 = document.createElement("div");
+            bodyDivInputDesc1.setAttribute("class", "col-sm-10");
+            bodyFormGroup.appendChild(bodyDivInputDesc1)
+
+            var bodyInputDesc1 = document.createElement('input');
+            bodyInputDesc1.setAttribute("type", "text");
+            bodyInputDesc1.setAttribute("class", "form-control");
+            bodyInputDesc1.setAttribute("id", "A_target_desc");
+            bodyInputDesc1.setAttribute("placeholder", "Text of target #1");
+            bodyDivInputDesc1.appendChild(bodyInputDesc1);
+
+            // first target Amount
+            var bodyFormGroup = document.createElement('div');
+            bodyFormGroup.setAttribute("class", "form-group");
+            bodyFormClass.appendChild(bodyFormGroup)
+            
+            var bodylabelAmount1 = document.createElement('label');
+            bodylabelAmount1.setAttribute("class", "col-sm-2 control-label");
+            bodylabelAmount1.setAttribute("for", "inputDescTarget1");
+            bodylabelAmount1.innerText = "Tokens target #1"
+            bodyFormGroup.appendChild(bodylabelAmount1)
+
+            var bodyDivInputAmount1 = document.createElement("div");
+            bodyDivInputAmount1.setAttribute("class", "col-sm-10");
+            bodyFormGroup.appendChild(bodyDivInputAmount1)
+
+            var bodyInputAmount1 = document.createElement('input');
+            bodyInputAmount1.setAttribute("type", "number");
+            bodyInputAmount1.setAttribute("class", "form-control");
+            bodyInputAmount1.setAttribute("id", "A_target_val");
+            bodyInputAmount1.setAttribute("placeholder", "Tokens of target #1");
+            bodyDivInputAmount1.appendChild(bodyInputAmount1);
+
+
+            // Second target Description
+            var bodyFormGroup = document.createElement('div');
+            bodyFormGroup.setAttribute("class", "form-group");
+            bodyFormClass.appendChild(bodyFormGroup)
+            
+            var bodylabelDesc2 = document.createElement('label');
+            bodylabelDesc2.setAttribute("class", "col-sm-2 control-label");
+            bodylabelDesc2.setAttribute("for", "inputDescTarget2");
+            bodylabelDesc2.innerText = "Text of target #2"
+            bodyFormGroup.appendChild(bodylabelDesc2)
+
+            var bodyDivInputDesc2 = document.createElement("div");
+            bodyDivInputDesc2.setAttribute("class", "col-sm-10");
+            bodyFormGroup.appendChild(bodyDivInputDesc2)
+
+            var bodyInputDesc2 = document.createElement('input');
+            bodyInputDesc2.setAttribute("type", "text");
+            bodyInputDesc2.setAttribute("class", "form-control");
+            bodyInputDesc2.setAttribute("id", "B_target_desc");
+            bodyInputDesc2.setAttribute("placeholder", "Text of target #2");
+            bodyDivInputDesc2.appendChild(bodyInputDesc2);
+
+            // Second target Amount
+            var bodyFormGroup = document.createElement('div');
+            bodyFormGroup.setAttribute("class", "form-group");
+            bodyFormClass.appendChild(bodyFormGroup)
+            
+            var bodylabelAmount2 = document.createElement('label');
+            bodylabelAmount2.setAttribute("class", "col-sm-2 control-label");
+            bodylabelAmount2.setAttribute("for", "inputDescTarget2");
+            bodylabelAmount2.innerText = "Tokens target #2"
+            bodyFormGroup.appendChild(bodylabelAmount2)
+
+            var bodyDivInputAmount2 = document.createElement("div");
+            bodyDivInputAmount2.setAttribute("class", "col-sm-10");
+            bodyFormGroup.appendChild(bodyDivInputAmount2)
+
+            var bodyInputAmount2 = document.createElement('input');
+            bodyInputAmount2.setAttribute("type", "number");
+            bodyInputAmount2.setAttribute("class", "form-control");
+            bodyInputAmount2.setAttribute("id", "B_target_val");
+            bodyInputAmount2.setAttribute("placeholder", "Tokens of target #2");
+            bodyDivInputAmount2.appendChild(bodyInputAmount2);
+
+            // Third target Description
+            var bodyFormGroup = document.createElement('div');
+            bodyFormGroup.setAttribute("class", "form-group");
+            bodyFormClass.appendChild(bodyFormGroup)
+            
+            var bodylabelDesc3 = document.createElement('label');
+            bodylabelDesc3.setAttribute("class", "col-sm-2 control-label");
+            bodylabelDesc3.setAttribute("for", "inputDescTarget3");
+            bodylabelDesc3.innerText = "Text of target #3"
+            bodyFormGroup.appendChild(bodylabelDesc3)
+
+            var bodyDivInputDesc3 = document.createElement("div");
+            bodyDivInputDesc3.setAttribute("class", "col-sm-10");
+            bodyFormGroup.appendChild(bodyDivInputDesc3)
+
+            var bodyInputDesc3 = document.createElement('input');
+            bodyInputDesc3.setAttribute("type", "text");
+            bodyInputDesc3.setAttribute("class", "form-control");
+            bodyInputDesc3.setAttribute("id", "C_target_desc");
+            bodyInputDesc3.setAttribute("placeholder", "Text of target #3");
+            bodyDivInputDesc3.appendChild(bodyInputDesc3);
+
+            // Third target Amount
+            var bodyFormGroup = document.createElement('div');
+            bodyFormGroup.setAttribute("class", "form-group");
+            bodyFormClass.appendChild(bodyFormGroup)
+            
+            var bodylabelAmount3 = document.createElement('label');
+            bodylabelAmount3.setAttribute("class", "col-sm-2 control-label");
+            bodylabelAmount3.setAttribute("for", "inputDescTarget3");
+            bodylabelAmount3.innerText = "Tokens target #3"
+            bodyFormGroup.appendChild(bodylabelAmount3)
+
+            var bodyDivInputAmount3 = document.createElement("div");
+            bodyDivInputAmount3.setAttribute("class", "col-sm-10");
+            bodyFormGroup.appendChild(bodyDivInputAmount3)
+
+            var bodyInputAmount3 = document.createElement('input');
+            bodyInputAmount3.setAttribute("type", "number");
+            bodyInputAmount3.setAttribute("class", "form-control");
+            bodyInputAmount3.setAttribute("id", "C_target_val");
+            bodyInputAmount3.setAttribute("placeholder", "Tokens of target #3");
+            bodyDivInputAmount3.appendChild(bodyInputAmount3);
+          
+            
+
+            var user_jid =document.createElement('input');
+            user_jid.setAttribute("type", "hidden");
+            user_jid.value = "";
+            user_jid.name = "user_jid";
+            user_jid.id = "user_jid";
+                        
+            modalBody.appendChild(user_jid);
+         
+
+            var modalButtons = document.createElement('div');
+            modalButtons.className= "modal-footer";
+            
+            var submitBtn = document.createElement('button');
+            submitBtn.className = "btn btn-warning";
+            submitBtn.id = "submitBtnItem";
+            submitBtn.innerText = "Submit";
+
+            submitBtn.onclick = function(){
+                
+                // call to API REST /roominstances/ROOM_INSTANCE to update targets
+                
+                var desc1 = $('#A_target_desc').val();
+                
+                var desc2 = $('#B_target_desc').val();
+                
+                var desc3 = $('#C_target_desc').val();
+                
+                var val1 = parseFloat($('#A_target_val').val());
+                if ( isNaN(val1) ){
+                    val1 = null;
+                }
+                
+                var val2 = parseFloat($('#B_target_val').val());
+                if ( isNaN(val2) ){
+                    val2 = null;
+                }
+                
+                var val3 = parseFloat($('#C_target_val').val());
+                if ( isNaN(val3) ){
+                    val3 = null;
+                }
+                
+                var csrftoken = $.cookie('csrftoken');
+    
+                function csrfSafeMethod(method) {
+                            // these HTTP methods do not require CSRF protection
+                            return (/^(GET|HEAD|OPTIONS|TRACE)$/.test(method));
+                            } 
+                $.ajaxSetup({
+    
+                crossDomain: false, // obviates need for sameOrigin test
+                    beforeSend: function(xhr, settings) {
+                        if (!csrfSafeMethod(settings.type)) {
+                            xhr.setRequestHeader("X-CSRFToken", csrftoken);
+                        }
+                    }
+                });
+                $.ajax(
+                
+                    {
+                    url : '/roominstances/' + ROOM_INSTANCE,
+                    type: "PATCH",
+                    dataType: 'application/json',
+                    data:
+                        {
+                            A_target_amount: val1,
+                            A_target_desc: desc1,
+                            B_target_amount: val2,
+                            B_target_desc: desc2,
+                            C_target_amount: val3,
+                            C_target_desc: desc3,
+                        },
+                         
+                    success: function(json) {console.log('Server Response: ' + json.server_response);},
+                    error : function(xhr,errmsg,err) {console.log(xhr.status + ": " + xhr.responseText);},
+                    complete: function (json) {
+                        msg1 = "At: " + val1 + ": " + desc1 + ";" + '\n'
+                        msg2 = "At: " + val2 + ": " + desc2 + ";" + '\n'
+                        msg3 = "At: " + val3 + ": " + desc3 + ";" + '\n'
+                        
+                        if (val3 != null && val2 != null && val1 != null) {
+                            target_msg = msg1 + msg2 + msg3
+                        }
+                        else if ( val2 == null && val3 == null){
+                            target_msg =   msg1
+                        }
+                        else if ( val3 == null){
+                            target_msg = msg1 + msg2
+                        }
+                        
+                        target_msg_ok = "NUOVI OBIETTIVI !!!!" + '\n' + target_msg;
+                        APP.xmpp.sendChatMessage(target_msg_ok, USER );
+                        $('#targetModal').modal('toggle');
+                    } 
+                });
+            };
+            modalButtons.appendChild(submitBtn);
+            
+            var closeBtn = document.createElement('button');
+            closeBtn.className = "btn btn-default";
+            closeBtn.setAttribute("data-dismiss", "modal");
+            closeBtn.innerText = "Close";
+            modalButtons.appendChild(closeBtn);
+
+            modalContent.appendChild(modalHeader);
+            modalContent.appendChild(modalBody);
+            modalContent.appendChild(modalButtons);
+
+            modalDialog.appendChild(modalContent);
+            mymodal.appendChild(modalDialog);
+
+            document.body.appendChild(mymodal);
+
+
+            //triggered when modal is about to be shown
+            $('#targetModal').on('show.bs.modal', function(e) {
+
+                //get data-id attribute of the clicked element
+                //var peerJid = $(e.relatedTarget).data('user-jid');
+
+                //populate the hidden field
+                //$(e.currentTarget).find('input[name="user_jid"]').val(peerJid);
+            });
+            
+        }    
+
+}
+
+
+
+function give_tip() {
+
+    var model_object = $('.object_item').attr('id');
+    var user
+    // get the id (pk) of the object to buy
+    if (model_object == 'toolbar_button_room_tip') {
+        var item_id = ROOM_ID;
+        var item_price = $('.buy_field').val();
+        var performer_id = PERFORMER_ID;
+        var get_url = "/userdetails/" + userAccountId;
+    }
+    else {
+        var item_id = $(this).attr('id');
+        var item_price = $(this).attr('price');
+        var performer_id = 0;
+        var get_url = "/userdetails/" + userAccountId;
+    }
+
+    console.log("userAccountId: " + get_url);
+    console.log("function called");  
+    console.log("id is: " + item_id);
+    console.log("model is: " + model_object);
+    console.log("Price is: " + item_price);
+   
+    
+    $.getJSON(get_url, function(result){
+            
+        if (parseFloat(result.balance) < parseFloat(item_price)){
+            console.log('Balance is: ' + result.balance);
+            custom_alert("Want to buy more tokens?", "Not enough funds!");
+        }   
+        
+        else if (parseFloat(result.balance) >= parseFloat(item_price)) {
+            console.log('Balance is: ' + result.balance);
+            post_to_view(item_id, model_object, item_price, performer_id, result.balance);
+        }
+        
+    });
+
+}
+
+
+function post_to_view(item_id, model_object, item_price, performer_id, balance){
+
+    item_id=arguments[0];
+    model_object= arguments[1];
+    if (model_object == 'videoOpenfire') {
+        redirect_url = '../../../buy/video/ok/'+ item_id;
+    }
+    else if (model_object == 'GalleryOpenfire') {
+        redirect_url = '../../../buy/gallery/ok/'+ item_id; 
+    }
+    else if (model_object == 'toolbar_button_room_tip') {
+        redirect_url = "." ;
+    }
+
+    var csrftoken = $.cookie('csrftoken');
+    
+    function csrfSafeMethod(method) {
+                // these HTTP methods do not require CSRF protection
+                return (/^(GET|HEAD|OPTIONS|TRACE)$/.test(method));
+                } 
+            
+    $.ajaxSetup({
+    
+    crossDomain: false, // obviates need for sameOrigin test
+        beforeSend: function(xhr, settings) {
+            if (!csrfSafeMethod(settings.type)) {
+                xhr.setRequestHeader("X-CSRFToken", csrftoken);
+            }
+        }
+    });
+
+    $.ajax(
+        {
+        url : '/buy/',
+        type: "POST",
+        dataType: 'application/json',
+        data:
+            {
+                model: model_object,
+                id: item_id,
+                tip: item_price,
+                performer: performer_id,
+            },
+             
+            success: function(json) {console.log('Server Response: ' + json.server_response);},
+            error : function(xhr,errmsg,err) {console.log(xhr.status + ": " + xhr.responseText);}, 
+            complete: function (json) {
+                if (model_object != 'toolbar_button_room_tip'){    
+                    window.location.href = redirect_url ;
+                }
+                else {
+                    var new_balance = parseFloat(balance) - parseFloat(item_price);
+                    $('#myTokens').text(new_balance);
+                    // need to update the balance on Contactlist
+                    // any button id is user name!
+                    
+                    
+                    // GET CALLto REST API /roominstances/ROOM_INSTANCE to get the actual balance
+                    var instance_url = "/roominstances/" + ROOM_INSTANCE
+                    $.getJSON(instance_url, function(result){
+                        var actual_credits = parseFloat(result.credits)
+                        var new_credits = actual_credits + parseFloat(item_price)
+                        // PATCH Call to REST API /roominstances/ROOM_INSTANCE to update the tip counter
+                        $.ajax(
+                        {
+                        url : instance_url,
+                        type: "PATCH",
+                        dataType: 'application/json',
+                        data:
+                            {
+                                credits: new_credits,
+                            },
+                            success: function(json) {console.log('Server Response: ' + json.server_response);},
+                            error : function(xhr,errmsg,err) {console.log(xhr.status + ": " + xhr.responseText);},
+                            complete: function(json) {
+                                // I'm sending the Tip notification to the chat after updating the room instance credits!                    
+                                APP.xmpp.sendTipMessage(
+                                    "I have tipped  (" + item_price + ") tokens, enjoy ;)",
+                                    USER,
+                                    item_price,
+                                    new_balance                                
+                                    
+                                );              
+                            }
+
+                        });    
+                    });
+                    
+                    // toastr.info(USER + " has tipped " + item_price + " tokens");
+                }
+            },
+        }
+    );
+};
+
+
+function custom_alert(output_msg, title_msg){
+
+    if (!title_msg)
+        title_msg = 'Alert';
+
+    if (!output_msg)
+        output_msg = 'No Message to Display.';
+
+    $("<div></div>").html(output_msg).dialog({
+        title: title_msg,
+        resizable: false,
+        modal: true,
+        buttons: {
+            "Yes": function() 
+            {
+                window.location.replace('../../../account/buy')                    
+            },
+
+            "No": function() 
+            {
+                 $( this ).dialog( "close" );
+
+            }
+        }
+    });
+}
 
 function hangup() {
-    APP.xmpp.disposeConference();
+    
     if(config.enableWelcomePage)
     {
         setTimeout(function()
@@ -79,8 +655,6 @@ function hangup() {
         }, 10000);
 
     }
-    // here we need to call a WS to update room status to CLOSED
-    // on a new button called "Close Room"
     UI.messageHandler.openDialog(
         "Session Terminated",
         "You have closed the room",
@@ -88,11 +662,44 @@ function hangup() {
         { "Confirm?": true },
         function(event, value, message, formVals)
         {
-            window.location.replace('../../rooms');
-            return false;
-        }
-    );
+            APP.xmpp.destroyRoom();
+        });
+    return false;
+}
 
+function deleteOpenRoom(roomName, callback){
+    var httpRequest = new XMLHttpRequest();
+        httpRequest.onreadystatechange = function(){ 
+           if (httpRequest.readyState === 4 &&
+                   httpRequest.status === 300){
+           callback.call(JSON.parse(httpRequest.responseText)); 
+        }
+    
+    };
+    
+    var csrftoken = getCookie('csrftoken');
+    // authstrt = 'Basic ' + btoa("Technical_Staff" + ':' + "MySv3vA17"); 
+    httpRequest.open('DELETE', "http://" + HOSTNAME + "/openrooms/" + roomName);
+    // httpRequest.setRequestHeader('Authorization', authstrt);
+    httpRequest.setRequestHeader("X-CSRFToken", csrftoken);
+    httpRequest.setRequestHeader('Content-Type', 'application/json');
+    httpRequest.send();
+}
+
+function getCookie(name) {
+    var cookieValue = null;
+    if (document.cookie && document.cookie != '') {
+        var cookies = document.cookie.split(';');
+        for (var i = 0; i < cookies.length; i++) {
+            var cookie = jQuery.trim(cookies[i]);
+            // Does this cookie string begin with the name we want?
+            if (cookie.substring(0, name.length + 1) == (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
 }
 
 /**
@@ -102,7 +709,7 @@ function hangup() {
 function toggleRecording() {
     APP.xmpp.toggleRecording(function (callback) {
         APP.UI.messageHandler.openTwoButtonDialog(null,
-                '<h2>Enter recording token</h2>' +
+                '<h3>Enter recording token</h3>' +
                 '<input id="recordingToken" type="text" ' +
                 'placeholder="token" autofocus>',
             false,
@@ -176,8 +783,8 @@ function inviteParticipants() {
 
     var conferenceName = roomUrl.substring(roomUrl.lastIndexOf('/') + 1);
     var subject = "Invitation to a " + interfaceConfig.APP_NAME + " (" + conferenceName + ")";
-    var body = "Hey there, I%27d like to invite you to a " + interfaceConfig.APP_NAME +
-        " conference I%27ve just set up.%0D%0A%0D%0A" +
+    var body = "Hey there, I%37d like to invite you to a " + interfaceConfig.APP_NAME +
+        " conference I%37ve just set up.%0D%0A%0D%0A" +
         "Please click on the following link in order" +
         " to join the conference.%0D%0A%0D%0A" +
         roomUrl +
@@ -206,7 +813,7 @@ function callSipButtonClicked()
         = config.defaultSipNumber ? config.defaultSipNumber : '';
 
     messageHandler.openTwoButtonDialog(null,
-        '<h2>Enter SIP number</h2>' +
+        '<h3>Enter SIP number</h3>' +
         '<input id="sipNumber" type="text"' +
         ' value="' + defaultNumber + '" autofocus>',
         false,
@@ -328,7 +935,7 @@ var Toolbar = (function (my) {
                     });
             } else {
                 messageHandler.openTwoButtonDialog(null,
-                    '<h2>Set a password to lock your room</h2>' +
+                    '<h3>Set a password to lock your room</h3>' +
                         '<input id="lockKey" type="text"' +
                         'placeholder="your password" autofocus>',
                     false,
@@ -390,7 +997,7 @@ var Toolbar = (function (my) {
      */
     my.openSettingsDialog = function () {
         messageHandler.openTwoButtonDialog(
-            '<h2>Configure your conference</h2>' +
+            '<h3>Configure your conference</h3>' +
                 '<input type="checkbox" id="initMuted">' +
                 'Participants join muted<br/>' +
                 '<input type="checkbox" id="requireNicknames">' +
@@ -466,6 +1073,7 @@ var Toolbar = (function (my) {
     };
     my.toggleContactList = function() {
         PanelToggler.toggleContactList();
+
     };
 
     /**

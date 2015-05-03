@@ -68,15 +68,15 @@ function setVisualNotification(show) {
     if (show && !notificationInterval) {
         notificationInterval = window.setInterval(function () {
             glower.toggleClass('active');
-            bottomGlower.toggleClass('active glowing');
+            //bottomGlower.toggleClass('active glowing');
         }, 800);
     }
     else if (!show && notificationInterval) {
         window.clearInterval(notificationInterval);
         notificationInterval = false;
         glower.removeClass('active');
-        bottomGlower.removeClass('glowing');
-        bottomGlower.addClass('active');
+        //bottomGlower.removeClass('glowing');
+        //bottomGlower.addClass('active');
     }
 }
 
@@ -230,20 +230,22 @@ var Chat = (function (my) {
      */
     my.updateChatConversation = function (from, displayName, message) {
         var divClassName = '';
-
-        if (APP.xmpp.myJid() === from) {
-            divClassName = "localuser";
+        var performerFullName = ROOM_NAME + "@" + config.hosts.muc + "/" + PERFORMER;
+        // if message is coming from the Performer, mark it in red
+        if (from == performerFullName) {
+            divClassName = "performeruser";   
         }
+        // else leave message blank
         else {
-            divClassName = "remoteuser";
+            divClassName = "watcheruser";
+        }
 
-            if (!Chat.isVisible()) {
+        if (!Chat.isVisible()) {
                 unreadMessages++;
                 UIUtil.playSoundNotification('chatNotification');
                 setVisualNotification(true);
             }
-        }
-
+            
         // replace links and smileys
         // Strophe already escapes special symbols on sending,
         // so we escape here only tags to avoid double &amp;

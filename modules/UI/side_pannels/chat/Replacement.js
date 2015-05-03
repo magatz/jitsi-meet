@@ -49,7 +49,7 @@ function smilify(body)
     for(var smiley in regexs) {
         if(regexs.hasOwnProperty(smiley)) {
             body = body.replace(regexs[smiley],
-                    '<img class="smiley" src="images/smileys/' + smiley + '.svg">');
+                    '<img class="smiley"  src=" ' + STATIC_URL + 'img/jitsi/images/smileys/' + smiley + '.svg">');
         }
     }
 

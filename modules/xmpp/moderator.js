@@ -151,18 +151,51 @@ var Moderator = {
         return elem;
     },
 
+    parseSessionId: function (resultIq) {
+        var sessionId = $(resultIq).find('conference').attr('session-id');
+        if (sessionId) {
+            console.info('Received sessionId: ' + sessionId);
+            localStorage.setItem('sessionId', sessionId);
+        }
+    },
+
     parseConfigOptions: function (resultIq) {
     
         Moderator.setFocusUserJid(
             $(resultIq).find('conference').attr('focusjid'));
     
-        var extAuthParam
+       /* var extAuthParam
             = $(resultIq).find('>conference>property[name=\'externalAuth\']');
         if (extAuthParam.length) {
             externalAuthEnabled = extAuthParam.attr('value') === 'true';
         }
     
-        console.info("External authentication enabled: " + externalAuthEnabled);
+        console.info("External authentication enabled: " + externalAuthEnabled);*/
+
+        var authenticationEnabled
+            = $(resultIq).find(
+                '>conference>property' +
+                '[name=\'authentication\'][value=\'true\']').length > 0;
+
+        console.info("Authentication enabled: " + authenticationEnabled);
+
+        externalAuthEnabled
+            = $(resultIq).find(
+                '>conference>property' +
+                '[name=\'externalAuth\'][value=\'true\']').length > 0;
+
+        console.info('External authentication enabled: ' + externalAuthEnabled);
+
+        if (!externalAuthEnabled) {
+            // We expect to receive sessionId in 'internal' authentication mode
+            Moderator.parseSessionId(resultIq);
+        }
+
+        var authIdentity = $(resultIq).find('>conference').attr('identity');
+
+        //eventEmitter.emit(AuthenticationEvents.IDENTITY_UPDATED,
+        //    authenticationEnabled, authIdentity);
+    
     
         // Check if focus has auto-detected Jigasi component(this will be also
         // included if we have passed our host from the config)
@@ -270,8 +303,38 @@ var Moderator = {
                 console.error("Get auth url error", error);
             }
         );
+    },
+
+    
+    logout: function (callback) {
+        var iq = $iq({to: Moderator.getFocusComponent(), type: 'set'});
+        var sessionId = localStorage.getItem('sessionId');
+        if (!sessionId) {
+            callback();
+            return;
+        }
+        iq.c('logout', {
+            xmlns: 'http://jitsi.org/protocol/focus',
+            'session-id': sessionId
+        });
+        connection.sendIQ(
+            iq,
+            function (result) {
+                var logoutUrl = $(result).find('logout').attr('logout-url');
+                if (logoutUrl) {
+                    logoutUrl = decodeURIComponent(logoutUrl);
+                }
+                console.info("Log out OK, url: " + logoutUrl, result);
+                localStorage.removeItem('sessionId');
+                callback(logoutUrl);
+            },
+            function (error) {
+                console.error("Logout error", error);
+            }
+        );
     }
 };
+
 
 module.exports = Moderator;
 

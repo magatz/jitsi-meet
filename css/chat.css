@@ -23,7 +23,7 @@
     word-wrap: break-word;
 }
 
-.localuser {
+.performeruser {
     color: #087dba;
 }
 
@@ -31,7 +31,7 @@
     color: red;
 }
 
-.remoteuser {
+.watcheruser {
     color: white;
 }
 

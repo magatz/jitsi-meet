@@ -15,11 +15,11 @@
   "author": "",
   "readmeFilename": "README.md",
   "dependencies": {
-      "events": "*",
-      "pako": "*",
-      "i18next-client": "*"
+    "events": "*",
+    "i18next-client": "*",
+    "minify": "^1.4.11",
+    "pako": "*"
   },
-  "devDependencies": {
-  },
+  "devDependencies": {},
   "license": "MIT"
 }
