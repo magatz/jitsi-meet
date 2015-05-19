@@ -40,7 +40,8 @@ var PanelToggler = (function(my) {
             = VideoLayout.getVideoSize(null, null, videospaceWidth, videospaceHeight);
         var videoWidth = videoSize[0];
         var videoHeight = videoSize[1];
-        var videoPosition = VideoLayout.getVideoPosition(videoWidth,
+        var videoPosition = VideoLayout.getVideoPosition(
+            videoWidth,
             videoHeight,
             videospaceWidth,
             videospaceHeight);
@@ -270,7 +271,7 @@ var PanelToggler = (function(my) {
     my.toggleContactList = function () {
         var completeFunction = ContactList.isVisible() ?
             function() {} : function () { $('#contactlist').trigger('shown');};
-        resizeVideoArea(ContactList.isVisible(), completeFunction, "ContactList");
+        //resizeVideoArea(ContactList.isVisible(), completeFunction, "ContactList");
 
         toggle(ContactList,
             '#contactlist',

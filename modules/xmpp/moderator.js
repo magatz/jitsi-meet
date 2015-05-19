@@ -73,6 +73,21 @@ var Moderator = {
             // FIXME: show some message before reload
             location.reload();
         }
+        
+
+        if (Strophe.getResourceFromJid(jid) == PERFORMER){
+            APP.UI.messageHandler.openDialog(
+            "The performer has left the Room",
+            "Now we are closing the room",
+            true,
+            { "OK": true },
+            function(event, value, message, formVals)
+            {
+                window.location.pathname = "../../hot/";
+            });
+            
+        }
+
     },
     
     setFocusUserJid: function (focusJid) {

@@ -16,6 +16,8 @@ var APP =
         this.keyboardshortcut = require("./modules/keyboardshortcut/keyboardshortcut");
         this.translation = require("./modules/translation/translation");
         this.Toolbar = require ("./modules/UI/toolbars/Toolbar");
+        this.EventEmitter = require("events");
+        this.XMPPEvents = require("./service/xmpp/XMPPEvents");
 
     }
 };
@@ -33,40 +35,7 @@ function init() {
     APP.keyboardshortcut.init();
 }
 
-function deleteOpenRoom(roomName, callback){
-    var httpRequest = new XMLHttpRequest();
-        httpRequest.onreadystatechange = function(){ 
-           if (httpRequest.readyState === 4 &&
-                   httpRequest.status === 300){
-           callback.call(JSON.parse(httpRequest.responseText)); 
-        }
-    
-    };
-    
-    var csrftoken = getCookie('csrftoken');
-    // authstrt = 'Basic ' + btoa("Technical_Staff" + ':' + "MySv3vA17"); 
-    httpRequest.open('DELETE', "http://" + HOSTNAME + "/openrooms/" + roomName, false);
-    // httpRequest.setRequestHeader('Authorization', authstrt);
-    httpRequest.setRequestHeader("X-CSRFToken", csrftoken);
-    httpRequest.setRequestHeader('Content-Type', 'application/json');
-    httpRequest.send();
-}
 
-function getCookie(name) {
-    var cookieValue = null;
-    if (document.cookie && document.cookie != '') {
-        var cookies = document.cookie.split(';');
-        for (var i = 0; i < cookies.length; i++) {
-            var cookie = jQuery.trim(cookies[i]);
-            // Does this cookie string begin with the name we want?
-            if (cookie.substring(0, name.length + 1) == (name + '=')) {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
-            }
-        }
-    }
-    return cookieValue;
-}
 
 $(document).ready(function () {
 
@@ -81,29 +50,29 @@ $(document).ready(function () {
 
 });
 
-$(window).bind('beforeunload', function () {
+$(window).bind('beforeunload', function (event) {
     
     //should hook here the REST DELETE call to openrooms?
     var performerFullName = ROOM_NAME + "@" + config.hosts.muc + "/" + PERFORMER;
     
-    if (APP.xmpp.myJid() == performerFullName)
-        deleteOpenRoom(ROOM_NAME);
-
-    
+    if (APP.xmpp.myJid() == performerFullName){
+        //var msg = "Per favore, " + PERFORMER + ",torna alla pagina e usa il tasto Back per uscire correttamente dalla stanza. In questo modo, tutti gli utenti saranno notificati della tua uscita";
+        //return msg;
+    }
     
     if(APP.API.isEnabled())
         APP.API.dispose();
-    
-    
 
-});
+
+
+}); 
 
 
 
 module.exports = APP;
 
 
-},{"./modules/API/API":2,"./modules/RTC/RTC":6,"./modules/UI/UI":8,"./modules/UI/toolbars/Toolbar":25,"./modules/connectionquality/connectionquality":35,"./modules/desktopsharing/desktopsharing":36,"./modules/keyboardshortcut/keyboardshortcut":37,"./modules/simulcast/simulcast":42,"./modules/statistics/statistics":45,"./modules/translation/translation":46,"./modules/xmpp/xmpp":60}],2:[function(require,module,exports){
+},{"./modules/API/API":2,"./modules/RTC/RTC":6,"./modules/UI/UI":8,"./modules/UI/toolbars/Toolbar":25,"./modules/connectionquality/connectionquality":35,"./modules/desktopsharing/desktopsharing":36,"./modules/keyboardshortcut/keyboardshortcut":37,"./modules/simulcast/simulcast":42,"./modules/statistics/statistics":45,"./modules/translation/translation":46,"./modules/xmpp/xmpp":60,"./service/xmpp/XMPPEvents":87,"events":88}],2:[function(require,module,exports){
 /**
  * Implements API class that communicates with external api class
  * and provides interface to access Jitsi Meet features by external
@@ -1455,17 +1424,21 @@ function registerListeners() {
         //FIXME: use Session Terminated from translation, but
         // 'reason' text comes from XMPP packet and is not translated
        
-       if (ROLE != 'watcher') {
-        reason = "The show is terminated, any user has been notified. Thank you!"
+       if (ROLE != "performer") {
+        reason = "The performer has shut down the room."
        }
+        console.log("Opening confirmation dialog")      
+        
+        setTimeout(function(){
         messageHandler.openDialog(
             "Session Terminated",
-             reason,
+            reason,
             true,
             {'Go back to opened rooms': true},
             function (event, value, message, formVals)
             {
-                if (ROLE = "watcher"){
+                console.log("Choosing destination pathname")
+                if (ROLE == "watcher"){
                     window.location.pathname = "../../hot/";
                 }
                 else {
@@ -1474,7 +1447,37 @@ function registerListeners() {
                 return false;
             }
         );
+        console.log("now exiting")
+    }, 1500);
     });
+
+    APP.xmpp.addListener(XMPPEvents.PRIVATE_AVAILABILITY, function (private_token_per_min) {
+        //devo sapere quanti token ha lo user, se sono meno del limite fissato dal performer allora nessun messaggio
+        messageHandler.openMessageDialog(
+            "Nice news!",
+            "The performer is available for a private show. The price per min is: " + private_token_per_min,
+            true,
+            {'OK': true},
+            function (event){
+                return false;
+            });
+        console.log("private show msg has been received")    
+    });
+
+    APP.xmpp.addListener(XMPPEvents.TICKET_AVAILABILITY, function (min_users_per_group, full_ticket_price, ) {
+        //devo sapere quanti token ha il user... se sono meno del prezzo del biglietto allora nessun messaggio
+        messageHandler.openMessageDialog(
+            "Nice news!",
+            "The performer is available for a ticket show. The price for one ticket is: " + (full_ticket_price / min_users_per_group) + 
+            "Click on on toolbar button to request a ticket show to the performer",
+            true,
+            {'OK': true},
+            function (event){
+                return false;
+            });
+        console.log("show ticket msg has been received")    
+    });
+
 
     APP.xmpp.addListener(XMPPEvents.BRIDGE_DOWN, function () {
         messageHandler.showError("Error",
@@ -1844,20 +1847,38 @@ function onTipGiven(jid, nick, amount, balance){
     
 }
 
-function onDirectModerationGranted(from, jid, displayName, role){
+function onDirectModerationGranted(from, jid, displayName, role, pres, isModerator){
     // questa funzione deve:
     // 1.aprire la lista degli utenti al numvo mod
     // 2.aggiornare la lista mettendo la stella al nuovo mod.
     
-    if (displayName == USER && role == "moderator") {
-        // react only if the elected user is the current user showing the contactList
-        if (!ContactList.isVisible()){    
-            Toolbar.toggleContactList();
-            UIUtil.playSoundNotification('grantedModeration');
-            
-        }
-    }    
+    var members = APP.xmpp.getMembers();
+    var gotPerformer = false
     
+    Object.keys(members).forEach(function (local_jid) {
+
+        if (Strophe.getResourceFromJid(local_jid) == PERFORMER) {
+            // Skip server side focus
+            gotPerformer = true;
+            return gotPerformer ;
+        }
+    });    
+
+    if (displayName == USER && role == "moderator" && gotPerformer == true) {
+        // react only if the elected user is the current user showing the contactList
+         if (!ContactList.isVisible()){    
+                Toolbar.toggleContactList();
+                UIUtil.playSoundNotification('grantedModeration');
+            }
+        }
+    if (displayName == PERFORMER){
+        // react only if the elected user is the current user showing the contactList
+         if (!ContactList.isVisible()){    
+                Toolbar.toggleContactList();
+                UIUtil.playSoundNotification('grantedModeration');
+            }
+    }    
+        
 
     // the contactlist has been built,we will change for anyone, the appearance of the button
     // using a gliph star for the new moderator
@@ -3663,7 +3684,8 @@ var PanelToggler = (function(my) {
             = VideoLayout.getVideoSize(null, null, videospaceWidth, videospaceHeight);
         var videoWidth = videoSize[0];
         var videoHeight = videoSize[1];
-        var videoPosition = VideoLayout.getVideoPosition(videoWidth,
+        var videoPosition = VideoLayout.getVideoPosition(
+            videoWidth,
             videoHeight,
             videospaceWidth,
             videospaceHeight);
@@ -3893,7 +3915,7 @@ var PanelToggler = (function(my) {
     my.toggleContactList = function () {
         var completeFunction = ContactList.isVisible() ?
             function() {} : function () { $('#contactlist').trigger('shown');};
-        resizeVideoArea(ContactList.isVisible(), completeFunction, "ContactList");
+        //resizeVideoArea(ContactList.isVisible(), completeFunction, "ContactList");
 
         toggle(ContactList,
             '#contactlist',
@@ -5225,30 +5247,74 @@ var buttonHandlers =
     "toolbar_button_show_target": function (event) {
             return show_targets();
     },
-    "toolbar_button_logout": function () {
-        // Ask for confirmation
-        messageHandler.openTwoButtonDialog(
-            "dialog.logoutTitle",
-            null,
-            "dialog.logoutQuestion",
-            null,
-            false,
-            "dialog.Yes",
-            function (evt, yes) {
-                if (yes) {
-                    APP.xmpp.logout(function (url) {
-                        if (url) {
-                            window.location.href = url;
-                        } else {
-                            hangup();
-                        }
-                    });
-                }
-            });
+    "toolbar_button_private": function (event) {
+        return notify_users_for_privateshow();
+    },
+    "toolbar_button_ticket_show": function(event) {
+        return notify_users_ticket_show()
+    },
+    "toolbar_button_reqticket": function(event) {
+        return reqTicket();
+
+    },
+    "toolbar_button_reqPrivate": function(event) {
+        return reqPrivate();
     }
 
+};
+
+function notify_users_for_ticketshow(){
+    // need to get the performer parameters
+    var get_url = "/performerprofile/" + PERFORMER_XMPP_ID;
+
+    $.getJSON(get_url, function(result){
+        var private_token_per_min = result.private_token_per_min;
+        var private_spy_per_min = result.private_spy_per_min;
+        var min_balance_private = result.min_balance_private;
+    });
+
+    var msg1 = "Available for private shows! Price per minute is: " + private_spy_per_min.toString() ;
+    var msg2 = " The minimum balance available is: " + min_balance_private.toString(); 
+    var message = msg1.concat(msg2);
+
+    // I'm sending my availabiluty for private show with my rate and min balance available
+    APP.xmpp.sendPriShowMessage(
+        "pippo",
+        private_token_per_min,
+        min_balance_private,
+        private_spy_per_min                   
+    );           
+};
+
+function notify_users_for_ticketshow(){
+// need to get the performer parameters
+    var get_url = "/performerprofile/" + PERFORMER_XMPP_ID;
+    $.getJSON(get_url, function(result){
+        var min_users_per_group = result.min_users_per_group;
+        var group_token_per_min = result.group_token_per_min;
+        var full_ticket_price = result.full_ticket_price;
+       
+    });
+
+    // I'm sending my availabiluty for ticket show with my rate and min balance available
+    APP.xmpp.sendPriShowMessage(
+        "I'm available for ticket shows! Price for any users " + (full_ticket_price / parseInt(min_users_per_group)) +" The Minimum users number is " + min_users_per_group ,
+        min_users_per_group,
+        group_token_per_min,
+        full_ticket_price
+    );           
+};
+
+
+function reqPrivate(){
 
 };
+
+
+function reqTicket(){
+
+}; 
+
 
 function show_targets(){
         
@@ -5815,7 +5881,7 @@ function hangup() {
         {
             APP.xmpp.destroyRoom();
         });
-    return false;
+    return false; 
 }
 
 function deleteOpenRoom(roomName, callback){
@@ -6605,7 +6671,7 @@ var messageHandler = (function(my) {
         if (persistent) {
             args.closeText = '';
         }
-        return $.prompt(msgString, args);
+        return $.prompt(msgString, args); 
     };
 
     /**
@@ -15601,6 +15667,21 @@ var Moderator = {
             // FIXME: show some message before reload
             location.reload();
         }
+        
+
+        if (Strophe.getResourceFromJid(jid) == PERFORMER){
+            APP.UI.messageHandler.openDialog(
+            "The performer has left the Room",
+            "Now we are closing the room",
+            true,
+            { "OK": true },
+            function(event, value, message, formVals)
+            {
+                window.location.pathname = "../../hot/";
+            });
+            
+        }
+
     },
     
     setFocusUserJid: function (focusJid) {
@@ -16213,7 +16294,7 @@ module.exports = function(XMPP, eventEmitter) {
                     // devo lanciare un nuovo evento, che faccia aprire la lista
                     // degli utenti al nuovo moderatore
                     eventEmitter.emit(XMPPEvents.GRANTED_MODERATION, 
-                        from, member.jid, member.displayName, member.role);
+                        from, member.jid, member.displayName, member.role, pres, Moderator.isModerator());
 
                     eventEmitter.emit(XMPPEvents.LOCALROLE_CHANGED,
                         from, member, pres, Moderator.isModerator(),
@@ -16275,6 +16356,7 @@ module.exports = function(XMPP, eventEmitter) {
                 if (reasonSelect.length) {
                     reason = reasonSelect.text();
                 }
+                
                 XMPP.disposeConference(false);
                 eventEmitter.emit(XMPPEvents.MUC_DESTROYED, reason);
                 return true;
@@ -16397,6 +16479,15 @@ module.exports = function(XMPP, eventEmitter) {
                 
                 var amount = msg.getAttribute('amount');
                 var balance = msg.getAttribute('balance');
+
+                var private_token_per_min =msg.getAttribute('private_token_per_min');
+                var private_spy_per_min = msg.getAttribute('private_spy_per_min');
+                var min_balance_private = msg.getAttribute('min_balance_private');
+
+                var min_users_per_group = msg.getAttribute('min_users_per_group');
+                var group_token_per_min = msg.getAttribute('group_token_per_min');
+                var full_ticket_price = msg.getAttribute('full_ticket_price');
+
                 // event to capture the tipping action sent via message
                 if (balance != "undefined" || amount != "undefined") {
                     eventEmitter.emit(XMPPEvents.TIP_GIVEN,
@@ -16404,6 +16495,22 @@ module.exports = function(XMPP, eventEmitter) {
                     console.log('chat', nick, txt);
                     eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
                         from, nick, txt, this.myroomjid);
+                }
+                // event to capture the availability of the performer for a private show
+                else if (private_spy_per_min != "undefined" || private_token_per_min != "undefined" || min_balance_private != "undefined"){
+                    eventEmitter.emit(XMPPEvents.PRIVATE_AVAILABILITY,
+                        from, private_token_per_min, private_spy_per_min, min_balance_private);
+                    console.log('chat', nick, txt);
+                    eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
+                        from, nick, txt, this.myroomjid);   
+                }
+                // event to capture the availability of the performer for a ticket show
+                else if (min_users_per_group != "undefined" || group_token_per_min != "undefined" || full_ticket_price != "undefined"){
+                    eventEmitter.emit(XMPPEvents.TICKET_AVAILABILITY,
+                        from, min_users_per_group, group_token_per_min, full_ticket_price);
+                    console.log('chat', nick, txt);
+                    eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
+                        from, nick, txt, this.myroomjid);   
                 }
                 else {
                     console.log('chat', nick, txt);
@@ -16515,20 +16622,22 @@ module.exports = function(XMPP, eventEmitter) {
 
         },
 
-        destroyRoom: function (jid) {
+        destroyRoom: function () {
+             
+             var reason_by_role = 'Any participant has been notified. See you soon!'
              var destroyIQ = $iq({to: this.roomjid, type: 'set'})
                 .c('query', {xmlns: 'http://jabber.org/protocol/muc#owner'})
                 .c('destroy', {jid: this.roomjid})
-                .c('reason').t('The show is finished, I\'m leaving! See you soon!').up().up().up();
+                .c('reason').t(reason_by_role).up().up().up();
                 
 
             this.connection.sendIQ(
                 destroyIQ,
                 function (result) {
-                    console.log('destroyed room with jid: ', jid, result);
+                    console.log('Destroyed room: ', this.roomjid, result);
                 },
                 function (error) {
-                    console.log('Error in destroying room: ', jid, error);
+                    console.log('Error in destroying room: ', this.roomjid, error);
                 });
 
         },
@@ -17477,19 +17586,22 @@ function registerListeners() {
 function setupEvents() {
     $(window).bind('beforeunload', function () {
         if (connection && connection.connected) {
-            // ensure signout
+            // ensure signout for users watcher
+            
+            var data = "<body rid='" + (connection.rid || connection._proto.rid)
+                    + "' xmlns='http://jabber.org/protocol/httpbind' sid='"
+                    + (connection.sid || connection._proto.sid)
+                    + "' type='terminate'>" +
+                    "<presence xmlns='jabber:client' type='unavailable'/>" +
+                    "</body>"
+
             $.ajax({
                 type: 'POST',
                 url: config.bosh,
                 async: false,
                 cache: false,
                 contentType: 'application/xml',
-                data: "<body rid='" + (connection.rid || connection._proto.rid)
-                    + "' xmlns='http://jabber.org/protocol/httpbind' sid='"
-                    + (connection.sid || connection._proto.sid)
-                    + "' type='terminate'>" +
-                    "<presence xmlns='jabber:client' type='unavailable'/>" +
-                    "</body>",
+                data: data,
                 success: function (data) {
                     console.log('signed out');
                     console.log(data);
@@ -17499,9 +17611,51 @@ function setupEvents() {
                             textStatus + ' (' + errorThrown + ')');
                 }
             });
+        
+
+            // the performer must destroy the room, and delete the record of OpenRoom (Django)
+            if ( ROLE == "performer") {
+                deleteOpenRoom(ROOM_NAME);
+                //return "****** Please go Back and use the Back button (yellow). This way each user will be notified! ******"
+            }
         }
         XMPP.disposeConference(true);
     });
+}
+
+function deleteOpenRoom(roomName, callback){
+    var httpRequest = new XMLHttpRequest();
+        httpRequest.onreadystatechange = function(){ 
+           if (httpRequest.readyState === 4 &&
+                   httpRequest.status === 300){
+           callback.call(JSON.parse(httpRequest.responseText)); 
+        }
+    
+    };
+    
+    var csrftoken = getCookie('csrftoken');
+    // authstrt = 'Basic ' + btoa("Technical_Staff" + ':' + "MySv3vA17"); 
+    httpRequest.open('DELETE', "http://" + HOSTNAME + "/openrooms/" + roomName, false);
+    // httpRequest.setRequestHeader('Authorization', authstrt);
+    httpRequest.setRequestHeader("X-CSRFToken", csrftoken);
+    httpRequest.setRequestHeader('Content-Type', 'application/json');
+    httpRequest.send();
+}
+
+function getCookie(name) {
+    var cookieValue = null;
+    if (document.cookie && document.cookie != '') {
+        var cookies = document.cookie.split(';');
+        for (var i = 0; i < cookies.length; i++) {
+            var cookie = jQuery.trim(cookies[i]);
+            // Does this cookie string begin with the name we want?
+            if (cookie.substring(0, name.length + 1) == (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
 }
 
 var XMPP = {
@@ -17772,8 +17926,12 @@ var XMPP = {
     sendTipMessage: function (message, nickname, amount, balance) {
         connection.emuc.sendMessage(message, nickname, amount, balance);
     },
-
-
+    sendPriShowMessage: function (message, nickname, rate, balance_limit, spy_rate) {
+        connection.emuc.sendMessage(message, nickname, rate, balance_limit, spy_rate);
+    },
+    sendTickShowMessage: function (message, nickname, min_n_users, group_token_per_min, full_ticket_price) {
+        connection.emuc.sendMessage(message, nickname, min_n_users, group_token_per_min, full_ticket_price);
+    },
     setSubject: function (topic) {
         connection.emuc.setSubject(topic);
     },
@@ -26473,7 +26631,9 @@ var XMPPEvents = {
     ETHERPAD: "xmpp.etherpad",
     TIP_GIVEN: "xmpp.tip",
     GRANTED_MODERATION: "xmpp.granted_moderation",
-    MUC_DESTROYED: "xmpp.muc_destroyed" 
+    MUC_DESTROYED: "xmpp.muc_destroyed",
+    PRIVATE_AVAILABILITY: "xmpp.private_availability",
+    TICKET_AVAILABILITY: "xmpp.ticket_availability" 
 };
 module.exports = XMPPEvents;
 },{}],88:[function(require,module,exports){

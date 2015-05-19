@@ -25,6 +25,8 @@ var XMPPEvents = {
     ETHERPAD: "xmpp.etherpad",
     TIP_GIVEN: "xmpp.tip",
     GRANTED_MODERATION: "xmpp.granted_moderation",
-    MUC_DESTROYED: "xmpp.muc_destroyed" 
+    MUC_DESTROYED: "xmpp.muc_destroyed",
+    PRIVATE_AVAILABILITY: "xmpp.private_availability",
+    TICKET_AVAILABILITY: "xmpp.ticket_availability" 
 };
 module.exports = XMPPEvents;

@@ -149,17 +149,21 @@ function registerListeners() {
         //FIXME: use Session Terminated from translation, but
         // 'reason' text comes from XMPP packet and is not translated
        
-       if (ROLE != 'watcher') {
-        reason = "The show is terminated, any user has been notified. Thank you!"
+       if (ROLE != "performer") {
+        reason = "The performer has shut down the room."
        }
+        console.log("Opening confirmation dialog")      
+        
+        setTimeout(function(){
         messageHandler.openDialog(
             "Session Terminated",
-             reason,
+            reason,
             true,
             {'Go back to opened rooms': true},
             function (event, value, message, formVals)
             {
-                if (ROLE = "watcher"){
+                console.log("Choosing destination pathname")
+                if (ROLE == "watcher"){
                     window.location.pathname = "../../hot/";
                 }
                 else {
@@ -168,7 +172,37 @@ function registerListeners() {
                 return false;
             }
         );
+        console.log("now exiting")
+    }, 1500);
     });
+
+    APP.xmpp.addListener(XMPPEvents.PRIVATE_AVAILABILITY, function (private_token_per_min) {
+        //devo sapere quanti token ha lo user, se sono meno del limite fissato dal performer allora nessun messaggio
+        messageHandler.openMessageDialog(
+            "Nice news!",
+            "The performer is available for a private show. The price per min is: " + private_token_per_min,
+            true,
+            {'OK': true},
+            function (event){
+                return false;
+            });
+        console.log("private show msg has been received")    
+    });
+
+    APP.xmpp.addListener(XMPPEvents.TICKET_AVAILABILITY, function (min_users_per_group, full_ticket_price, ) {
+        //devo sapere quanti token ha il user... se sono meno del prezzo del biglietto allora nessun messaggio
+        messageHandler.openMessageDialog(
+            "Nice news!",
+            "The performer is available for a ticket show. The price for one ticket is: " + (full_ticket_price / min_users_per_group) + 
+            "Click on on toolbar button to request a ticket show to the performer",
+            true,
+            {'OK': true},
+            function (event){
+                return false;
+            });
+        console.log("show ticket msg has been received")    
+    });
+
 
     APP.xmpp.addListener(XMPPEvents.BRIDGE_DOWN, function () {
         messageHandler.showError("Error",
@@ -538,20 +572,38 @@ function onTipGiven(jid, nick, amount, balance){
     
 }
 
-function onDirectModerationGranted(from, jid, displayName, role){
+function onDirectModerationGranted(from, jid, displayName, role, pres, isModerator){
     // questa funzione deve:
     // 1.aprire la lista degli utenti al numvo mod
     // 2.aggiornare la lista mettendo la stella al nuovo mod.
     
-    if (displayName == USER && role == "moderator") {
-        // react only if the elected user is the current user showing the contactList
-        if (!ContactList.isVisible()){    
-            Toolbar.toggleContactList();
-            UIUtil.playSoundNotification('grantedModeration');
-            
-        }
-    }    
+    var members = APP.xmpp.getMembers();
+    var gotPerformer = false
     
+    Object.keys(members).forEach(function (local_jid) {
+
+        if (Strophe.getResourceFromJid(local_jid) == PERFORMER) {
+            // Skip server side focus
+            gotPerformer = true;
+            return gotPerformer ;
+        }
+    });    
+
+    if (displayName == USER && role == "moderator" && gotPerformer == true) {
+        // react only if the elected user is the current user showing the contactList
+         if (!ContactList.isVisible()){    
+                Toolbar.toggleContactList();
+                UIUtil.playSoundNotification('grantedModeration');
+            }
+        }
+    if (displayName == PERFORMER){
+        // react only if the elected user is the current user showing the contactList
+         if (!ContactList.isVisible()){    
+                Toolbar.toggleContactList();
+                UIUtil.playSoundNotification('grantedModeration');
+            }
+    }    
+        
 
     // the contactlist has been built,we will change for anyone, the appearance of the button
     // using a gliph star for the new moderator

@@ -186,7 +186,7 @@ module.exports = function(XMPP, eventEmitter) {
                     // devo lanciare un nuovo evento, che faccia aprire la lista
                     // degli utenti al nuovo moderatore
                     eventEmitter.emit(XMPPEvents.GRANTED_MODERATION, 
-                        from, member.jid, member.displayName, member.role);
+                        from, member.jid, member.displayName, member.role, pres, Moderator.isModerator());
 
                     eventEmitter.emit(XMPPEvents.LOCALROLE_CHANGED,
                         from, member, pres, Moderator.isModerator(),
@@ -248,6 +248,7 @@ module.exports = function(XMPP, eventEmitter) {
                 if (reasonSelect.length) {
                     reason = reasonSelect.text();
                 }
+                
                 XMPP.disposeConference(false);
                 eventEmitter.emit(XMPPEvents.MUC_DESTROYED, reason);
                 return true;
@@ -370,6 +371,15 @@ module.exports = function(XMPP, eventEmitter) {
                 
                 var amount = msg.getAttribute('amount');
                 var balance = msg.getAttribute('balance');
+
+                var private_token_per_min =msg.getAttribute('private_token_per_min');
+                var private_spy_per_min = msg.getAttribute('private_spy_per_min');
+                var min_balance_private = msg.getAttribute('min_balance_private');
+
+                var min_users_per_group = msg.getAttribute('min_users_per_group');
+                var group_token_per_min = msg.getAttribute('group_token_per_min');
+                var full_ticket_price = msg.getAttribute('full_ticket_price');
+
                 // event to capture the tipping action sent via message
                 if (balance != "undefined" || amount != "undefined") {
                     eventEmitter.emit(XMPPEvents.TIP_GIVEN,
@@ -377,6 +387,22 @@ module.exports = function(XMPP, eventEmitter) {
                     console.log('chat', nick, txt);
                     eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
                         from, nick, txt, this.myroomjid);
+                }
+                // event to capture the availability of the performer for a private show
+                else if (private_spy_per_min != "undefined" || private_token_per_min != "undefined" || min_balance_private != "undefined"){
+                    eventEmitter.emit(XMPPEvents.PRIVATE_AVAILABILITY,
+                        from, private_token_per_min, private_spy_per_min, min_balance_private);
+                    console.log('chat', nick, txt);
+                    eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
+                        from, nick, txt, this.myroomjid);   
+                }
+                // event to capture the availability of the performer for a ticket show
+                else if (min_users_per_group != "undefined" || group_token_per_min != "undefined" || full_ticket_price != "undefined"){
+                    eventEmitter.emit(XMPPEvents.TICKET_AVAILABILITY,
+                        from, min_users_per_group, group_token_per_min, full_ticket_price);
+                    console.log('chat', nick, txt);
+                    eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
+                        from, nick, txt, this.myroomjid);   
                 }
                 else {
                     console.log('chat', nick, txt);
@@ -488,20 +514,22 @@ module.exports = function(XMPP, eventEmitter) {
 
         },
 
-        destroyRoom: function (jid) {
+        destroyRoom: function () {
+             
+             var reason_by_role = 'Any participant has been notified. See you soon!'
              var destroyIQ = $iq({to: this.roomjid, type: 'set'})
                 .c('query', {xmlns: 'http://jabber.org/protocol/muc#owner'})
                 .c('destroy', {jid: this.roomjid})
-                .c('reason').t('The show is finished, I\'m leaving! See you soon!').up().up().up();
+                .c('reason').t(reason_by_role).up().up().up();
                 
 
             this.connection.sendIQ(
                 destroyIQ,
                 function (result) {
-                    console.log('destroyed room with jid: ', jid, result);
+                    console.log('Destroyed room: ', this.roomjid, result);
                 },
                 function (error) {
-                    console.log('Error in destroying room: ', jid, error);
+                    console.log('Error in destroying room: ', this.roomjid, error);
                 });
 
         },

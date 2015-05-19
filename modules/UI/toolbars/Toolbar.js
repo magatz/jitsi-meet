@@ -74,30 +74,74 @@ var buttonHandlers =
     "toolbar_button_show_target": function (event) {
             return show_targets();
     },
-    "toolbar_button_logout": function () {
-        // Ask for confirmation
-        messageHandler.openTwoButtonDialog(
-            "dialog.logoutTitle",
-            null,
-            "dialog.logoutQuestion",
-            null,
-            false,
-            "dialog.Yes",
-            function (evt, yes) {
-                if (yes) {
-                    APP.xmpp.logout(function (url) {
-                        if (url) {
-                            window.location.href = url;
-                        } else {
-                            hangup();
-                        }
-                    });
-                }
-            });
+    "toolbar_button_private": function (event) {
+        return notify_users_for_privateshow();
+    },
+    "toolbar_button_ticket_show": function(event) {
+        return notify_users_ticket_show()
+    },
+    "toolbar_button_reqticket": function(event) {
+        return reqTicket();
+
+    },
+    "toolbar_button_reqPrivate": function(event) {
+        return reqPrivate();
     }
 
+};
+
+function notify_users_for_ticketshow(){
+    // need to get the performer parameters
+    var get_url = "/performerprofile/" + PERFORMER_XMPP_ID;
+
+    $.getJSON(get_url, function(result){
+        var private_token_per_min = result.private_token_per_min;
+        var private_spy_per_min = result.private_spy_per_min;
+        var min_balance_private = result.min_balance_private;
+    });
+
+    var msg1 = "Available for private shows! Price per minute is: " + private_spy_per_min.toString() ;
+    var msg2 = " The minimum balance available is: " + min_balance_private.toString(); 
+    var message = msg1.concat(msg2);
+
+    // I'm sending my availabiluty for private show with my rate and min balance available
+    APP.xmpp.sendPriShowMessage(
+        "pippo",
+        private_token_per_min,
+        min_balance_private,
+        private_spy_per_min                   
+    );           
+};
+
+function notify_users_for_ticketshow(){
+// need to get the performer parameters
+    var get_url = "/performerprofile/" + PERFORMER_XMPP_ID;
+    $.getJSON(get_url, function(result){
+        var min_users_per_group = result.min_users_per_group;
+        var group_token_per_min = result.group_token_per_min;
+        var full_ticket_price = result.full_ticket_price;
+       
+    });
+
+    // I'm sending my availabiluty for ticket show with my rate and min balance available
+    APP.xmpp.sendPriShowMessage(
+        "I'm available for ticket shows! Price for any users " + (full_ticket_price / parseInt(min_users_per_group)) +" The Minimum users number is " + min_users_per_group ,
+        min_users_per_group,
+        group_token_per_min,
+        full_ticket_price
+    );           
+};
+
+
+function reqPrivate(){
 
 };
+
+
+function reqTicket(){
+
+}; 
+
 
 function show_targets(){
         
@@ -664,7 +708,7 @@ function hangup() {
         {
             APP.xmpp.destroyRoom();
         });
-    return false;
+    return false; 
 }
 
 function deleteOpenRoom(roomName, callback){

@@ -128,19 +128,22 @@ function registerListeners() {
 function setupEvents() {
     $(window).bind('beforeunload', function () {
         if (connection && connection.connected) {
-            // ensure signout
+            // ensure signout for users watcher
+            
+            var data = "<body rid='" + (connection.rid || connection._proto.rid)
+                    + "' xmlns='http://jabber.org/protocol/httpbind' sid='"
+                    + (connection.sid || connection._proto.sid)
+                    + "' type='terminate'>" +
+                    "<presence xmlns='jabber:client' type='unavailable'/>" +
+                    "</body>"
+
             $.ajax({
                 type: 'POST',
                 url: config.bosh,
                 async: false,
                 cache: false,
                 contentType: 'application/xml',
-                data: "<body rid='" + (connection.rid || connection._proto.rid)
-                    + "' xmlns='http://jabber.org/protocol/httpbind' sid='"
-                    + (connection.sid || connection._proto.sid)
-                    + "' type='terminate'>" +
-                    "<presence xmlns='jabber:client' type='unavailable'/>" +
-                    "</body>",
+                data: data,
                 success: function (data) {
                     console.log('signed out');
                     console.log(data);
@@ -150,9 +153,51 @@ function setupEvents() {
                             textStatus + ' (' + errorThrown + ')');
                 }
             });
+        
+
+            // the performer must destroy the room, and delete the record of OpenRoom (Django)
+            if ( ROLE == "performer") {
+                deleteOpenRoom(ROOM_NAME);
+                //return "****** Please go Back and use the Back button (yellow). This way each user will be notified! ******"
+            }
         }
         XMPP.disposeConference(true);
     });
+}
+
+function deleteOpenRoom(roomName, callback){
+    var httpRequest = new XMLHttpRequest();
+        httpRequest.onreadystatechange = function(){ 
+           if (httpRequest.readyState === 4 &&
+                   httpRequest.status === 300){
+           callback.call(JSON.parse(httpRequest.responseText)); 
+        }
+    
+    };
+    
+    var csrftoken = getCookie('csrftoken');
+    // authstrt = 'Basic ' + btoa("Technical_Staff" + ':' + "MySv3vA17"); 
+    httpRequest.open('DELETE', "http://" + HOSTNAME + "/openrooms/" + roomName, false);
+    // httpRequest.setRequestHeader('Authorization', authstrt);
+    httpRequest.setRequestHeader("X-CSRFToken", csrftoken);
+    httpRequest.setRequestHeader('Content-Type', 'application/json');
+    httpRequest.send();
+}
+
+function getCookie(name) {
+    var cookieValue = null;
+    if (document.cookie && document.cookie != '') {
+        var cookies = document.cookie.split(';');
+        for (var i = 0; i < cookies.length; i++) {
+            var cookie = jQuery.trim(cookies[i]);
+            // Does this cookie string begin with the name we want?
+            if (cookie.substring(0, name.length + 1) == (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
 }
 
 var XMPP = {
@@ -423,8 +468,12 @@ var XMPP = {
     sendTipMessage: function (message, nickname, amount, balance) {
         connection.emuc.sendMessage(message, nickname, amount, balance);
     },
-
-
+    sendPriShowMessage: function (message, nickname, rate, balance_limit, spy_rate) {
+        connection.emuc.sendMessage(message, nickname, rate, balance_limit, spy_rate);
+    },
+    sendTickShowMessage: function (message, nickname, min_n_users, group_token_per_min, full_ticket_price) {
+        connection.emuc.sendMessage(message, nickname, min_n_users, group_token_per_min, full_ticket_price);
+    },
     setSubject: function (topic) {
         connection.emuc.setSubject(topic);
     },

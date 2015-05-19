@@ -67,7 +67,7 @@ var messageHandler = (function(my) {
         if (persistent) {
             args.closeText = '';
         }
-        return $.prompt(msgString, args);
+        return $.prompt(msgString, args); 
     };
 
     /**
