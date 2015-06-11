@@ -590,7 +590,15 @@ var VideoLayout = (function (my) {
             localVideoContainer.appendChild(localVideo);
             }
         else if (ROLE == "watcher") {
-            var localVideoContainer = document.getElementById('localVideoWrapper');
+            //var localVideoContainer = document.getElementById('localVideoWrapper');
+            //localVideoContainer.appendChild(localVideo);
+
+            //callback = null
+            //App.xmpp.setVideoMute(true, callback);
+            //App.xmpp.setAudioMute(true, callback);
+            
+            //console.log ('Local video')
+        
         }    
 
         // Set default display name.

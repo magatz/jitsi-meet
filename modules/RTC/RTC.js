@@ -142,6 +142,8 @@ var RTC = {
             callback = null
             APP.xmpp.setVideoMute(true, callback)
             APP.xmpp.setAudioMute(true, callback)
+            
+
 
         }
 

@@ -49,10 +49,10 @@ module.exports = function (XMPP) {
             }
             return true;
         },
-        eject: function (jid) {
+        eject: function (jid, reason) {
             // We're not the focus, so can't terminate
             //connection.jingle.terminateRemoteByJid(jid, 'kick');
-            this.connection.emuc.kick(jid);
+            this.connection.emuc.kick(jid, reason);
         },
         // Andrea Magatti 19-03-2015
         ban: function(jid){

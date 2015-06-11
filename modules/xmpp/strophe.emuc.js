@@ -272,8 +272,9 @@ module.exports = function(XMPP, eventEmitter) {
             if ($(pres).find('>x[xmlns="http://jabber.org/protocol/muc#user"]>status[code="307"]').length) {
                 $(document).trigger('kicked.muc', [from]);
                 if (this.myroomjid === from) {
+                    reason = pres.lastChild.textContent;
                     XMPP.disposeConference(false);
-                    eventEmitter.emit(XMPPEvents.KICKED);
+                    eventEmitter.emit(XMPPEvents.KICKED, reason);
                 }
             }
             
@@ -317,15 +318,13 @@ module.exports = function(XMPP, eventEmitter) {
             } else {
                 console.warn('onPresError ', pres);
                 APP.UI.messageHandler.openReportDialog(null,
-                    'Oops! Something went wrong and we couldn`t connect to the conference.',
+                    "Sorry you can't join the room. Maybe you are banned, or this room is members only. Try again later",
                     pres);
             }
             return true;
         },
-        sendMessage: function (body, nickname, amount, balance) {
-            // try to send a custom value in the message
-            // Andrea Magatti 28-04-2015
-            var msg = $msg({to: this.roomjid, type: 'groupchat', balance: balance, amount: amount});
+        sendMessage: function (body, nickname) {
+            var msg = $msg({to: this.roomjid, type: 'groupchat'});
             msg.c('body', body).up();
             if (nickname) {
                 msg.c('nick', {xmlns: 'http://jabber.org/protocol/nick'}).t(nickname).up().up();
@@ -334,6 +333,72 @@ module.exports = function(XMPP, eventEmitter) {
             this.connection.send(msg);
             eventEmitter.emit(XMPPEvents.SENDING_CHAT_MESSAGE, body);
         },
+
+        sendDirectRequest: function(body, from, recipient, kind){
+            var msg = $msg({from: from, to: recipient, type: 'chat', kind: kind});
+            msg.c('body', body).up();
+            this.connection.send(msg);
+        },
+
+        sendHiddenDirectMessage: function(body, from, recipient, kind, action){
+            var msg = $msg({from: from, to: recipient, type: 'chat', kind: kind, action: action});
+            msg.c('body', body).up();
+            this.connection.send(msg);    
+        },
+
+        sendTipMessage: function (body, nickname, amount, balance, notify) {
+            
+            // try to send a custom value in the message
+            // Andrea Magatti 28-04-2015
+            var msg = $msg({to: this.roomjid, type: 'groupchat', balance: balance, amount: amount, notify: notify});
+            msg.c('body', body).up();
+            if (nickname) {
+                msg.c('nick', {xmlns: 'http://jabber.org/protocol/nick'}).t(nickname).up().up();
+            }
+                       
+            this.connection.send(msg);
+            eventEmitter.emit(XMPPEvents.SENDING_CHAT_MESSAGE, body);
+
+        },
+        sendPrivateShowMessage: function (body, nickname, rate, balance_limit, spy_rate) {
+            // values for private show in the message
+            // Andrea Magatti 20-05-2015
+            var msg = $msg({to: this.roomjid, type: 'groupchat', rate: rate, balance_limit: balance_limit, spy_rate: spy_rate});
+            msg.c('body', body).up();
+            if (nickname) {
+                msg.c('nick', {xmlns: 'http://jabber.org/protocol/nick'}).t(nickname).up().up();
+            }
+                       
+            this.connection.send(msg);
+            eventEmitter.emit(XMPPEvents.SENDING_CHAT_MESSAGE, body);
+        },
+        sendTicketShowMessage: function (body, nickname, min_n_users, group_token_per_min, full_ticket_price) {
+            // values for ticket show
+            // Andrea Magatti 20-05-2015
+            var msg = $msg({to: this.roomjid, type: 'groupchat', min_n_users: min_n_users, group_token_per_min: group_token_per_min, full_ticket_price: full_ticket_price});
+            msg.c('body', body).up();
+            if (nickname) {
+                msg.c('nick', {xmlns: 'http://jabber.org/protocol/nick'}).t(nickname).up().up();
+            }
+                       
+            this.connection.send(msg);
+            eventEmitter.emit(XMPPEvents.SENDING_CHAT_MESSAGE, body);
+        },
+        sendTicketShowStarting: function(body, nickname, price){
+            // values to let the user konw how much will costo the ticket
+            // Andrea Magatti 27-05-2015
+            var msg = $msg({to: this.roomjid, type: 'groupchat', price: price});
+            msg.c('body', body).up();
+            if (nickname) {
+                msg.c('nick', {xmlns: 'http://jabber.org/protocol/nick'}).t(nickname).up().up();
+            }
+                       
+            this.connection.send(msg);
+            eventEmitter.emit(XMPPEvents.SENDING_CHAT_MESSAGE, body);
+        },
+
+
+
         setSubject: function (subject) {
             var msg = $msg({to: this.roomjid, type: 'groupchat'});
             msg.c('subject', subject);
@@ -350,11 +415,17 @@ module.exports = function(XMPP, eventEmitter) {
 
             var txt = $(msg).find('>body').text();
             var type = msg.getAttribute("type");
+            var kind = msg.getAttribute('kind');
+            var action = msg.getAttribute('action');
+            var result = msg.getAttribute('result');
+            var price = msg.getAttribute('price');
+
             if (type == "error") {
                 eventEmitter.emit(XMPPEvents.CHAT_ERROR_RECEIVED,
                     $(msg).find('>text').text(), txt);
                 return true;
             }
+
 
             var subject = $(msg).find('>subject');
             if (subject.length) {
@@ -372,42 +443,76 @@ module.exports = function(XMPP, eventEmitter) {
                 var amount = msg.getAttribute('amount');
                 var balance = msg.getAttribute('balance');
 
-                var private_token_per_min =msg.getAttribute('private_token_per_min');
-                var private_spy_per_min = msg.getAttribute('private_spy_per_min');
-                var min_balance_private = msg.getAttribute('min_balance_private');
+                var private_token_per_min =msg.getAttribute('rate');
+                var private_spy_per_min = msg.getAttribute('spy_rate');
+                var min_balance_private = msg.getAttribute('balance_limit');
 
-                var min_users_per_group = msg.getAttribute('min_users_per_group');
+                var min_n_users = msg.getAttribute('min_n_users');
                 var group_token_per_min = msg.getAttribute('group_token_per_min');
                 var full_ticket_price = msg.getAttribute('full_ticket_price');
 
+                var notify = msg.getAttribute('notify');
+
                 // event to capture the tipping action sent via message
-                if (balance != "undefined" || amount != "undefined") {
+                if (balance != null || amount != null) {
                     eventEmitter.emit(XMPPEvents.TIP_GIVEN,
                         from, nick, amount, balance);
                     console.log('chat', nick, txt);
-                    eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
-                        from, nick, txt, this.myroomjid);
+                    // dont' need to send chat message in private or spy rooms
+                    if (notify == "true"){
+                        eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
+                            from, nick, txt, this.myroomjid, type);
+                    }
                 }
                 // event to capture the availability of the performer for a private show
-                else if (private_spy_per_min != "undefined" || private_token_per_min != "undefined" || min_balance_private != "undefined"){
+                else if (private_spy_per_min != null || private_token_per_min != null || min_balance_private != null){
                     eventEmitter.emit(XMPPEvents.PRIVATE_AVAILABILITY,
-                        from, private_token_per_min, private_spy_per_min, min_balance_private);
+                        from, nick, private_token_per_min, private_spy_per_min, min_balance_private);
                     console.log('chat', nick, txt);
                     eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
-                        from, nick, txt, this.myroomjid);   
+                        from, nick, txt, this.myroomjid, type);   
                 }
                 // event to capture the availability of the performer for a ticket show
-                else if (min_users_per_group != "undefined" || group_token_per_min != "undefined" || full_ticket_price != "undefined"){
+                else if (min_n_users != null || group_token_per_min != null || full_ticket_price != null){
                     eventEmitter.emit(XMPPEvents.TICKET_AVAILABILITY,
-                        from, min_users_per_group, group_token_per_min, full_ticket_price);
+                        from, nick, min_n_users, group_token_per_min, full_ticket_price);
                     console.log('chat', nick, txt);
                     eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
-                        from, nick, txt, this.myroomjid);   
+                        from, nick, txt, this.myroomjid, type);   
                 }
+                else if (type =='chat' && kind == 'private'){
+                    // this handles direct messages
+                    eventEmitter.emit(XMPPEvents.PRIVATE_SHOW_REQUEST_RECEIVED, from, txt);
+                    console.log('chat', nick, txt);
+                    
+                    eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
+                        from, nick, txt, this.myroomjid, type);
+                }
+                else if (type =='chat' && kind == 'ticket'){
+                    // this handles direct messages
+                    eventEmitter.emit(XMPPEvents.TICKET_SHOW_REQUEST_RECEIVED, from, txt, result);
+                    console.log('chat', nick, txt);
+                    eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
+                        from, nick, txt, this.myroomjid, type);
+                }
+                else if (type =='chat' && kind == 'hidden'){
+                    if (action=="user_choose_video_sharing"){
+                        eventEmitter.emit(XMPPEvents.PRIVATE_SHOW_STARTING, from, txt, action);
+                        console.log('chat', nick, txt);
+                    }
+                    else if (action='user_in spy_mode'){
+                        eventEmitter.emit(XMPPEvents.SPY_SHOW_STARTING, from, txt, action);
+                        console.log('chat', nick, txt);
+                    }    
+                }
+                else if (type='groupchat' && price != null){
+                    eventEmitter.emit(XMPPEvents.TICKET_SHOW_STARTING, from, txt, price);
+                    console.log('chat', nick, txt);
+                } 
                 else {
                     console.log('chat', nick, txt);
                     eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
-                        from, nick, txt, this.myroomjid);
+                        from, nick, txt, this.myroomjid, type);
                 }
             }
             return true;
@@ -433,11 +538,70 @@ module.exports = function(XMPP, eventEmitter) {
                     }
                 }, onError);
         },
-        kick: function (jid) {
+        
+        makeRoomMembersOnly: function(onSuccess, onError, onNotSupported){
+            //http://xmpp.org/extensions/xep-0045.html#roomconfig
+            var ob = this;
+            this.connection.sendIQ($iq({to: ob.roomjid, type: 'get'}).c('query', {xmlns: 'http://jabber.org/protocol/muc#owner'}),
+                function (res){
+                    if ($(res).find('>query>x[xmlns="jabber:x:data"]>field[var="muc#roomconfig_membersonly"]').length){
+                        var formsubmit = $iq({to: ob.roomjid, type: 'set'}).c('query', {xmlns: 'http://jabber.org/protocol/muc#owner'});
+                        formsubmit.c('x', {xmlns: 'jabber:x:data', type: 'submit'});
+                        formsubmit.c('field', {'var': 'FORM_TYPE'}).c('value').t('http://jabber.org/protocol/muc#roomconfig').up().up();
+                        formsubmit.c('field', {'var': "muc#roomconfig_membersonly"}).c('value').t(1).up().up();
+                        // Fixes a bug in prosody 0.9.+ https://code.google.com/p/lxmppd/issues/detail?id=373
+                        formsubmit.c('field', {'var': 'muc#roomconfig_whois'}).c('value').t('anyone').up().up();
+                        ob.connection.sendIQ(formsubmit,
+                            onSuccess,
+                            onError);
+                    } else {
+                        onNotSupported();
+                    }
+                }, onError);
+        },
+
+        makeRoomNotMembersOnly: function(onSuccess, onError, onNotSupported){
+            //http://xmpp.org/extensions/xep-0045.html#roomconfig
+            var ob = this;
+            this.connection.sendIQ($iq({to: ob.roomjid, type: 'get'}).c('query', {xmlns: 'http://jabber.org/protocol/muc#owner'}),
+                function (res){
+                    if ($(res).find('>query>x[xmlns="jabber:x:data"]>field[var="muc#roomconfig_membersonly"]').length){
+                        var formsubmit = $iq({to: ob.roomjid, type: 'set'}).c('query', {xmlns: 'http://jabber.org/protocol/muc#owner'});
+                        formsubmit.c('x', {xmlns: 'jabber:x:data', type: 'submit'});
+                        formsubmit.c('field', {'var': 'FORM_TYPE'}).c('value').t('http://jabber.org/protocol/muc#roomconfig').up().up();
+                        formsubmit.c('field', {'var': "muc#roomconfig_membersonly"}).c('value').t(0).up().up();
+                        // Fixes a bug in prosody 0.9.+ https://code.google.com/p/lxmppd/issues/detail?id=373
+                        formsubmit.c('field', {'var': 'muc#roomconfig_whois'}).c('value').t('anyone').up().up();
+                        ob.connection.sendIQ(formsubmit,
+                            onSuccess,
+                            onError);
+                    } else {
+                        onNotSupported();
+                    }
+                }, onError);
+        },
+
+        revokeMembership: function(jid){
+            myjid = PERFORMER_ID + "@" + config.hosts.domain;
+            var revokeMembershipIQ = $iq({to: this.roomjid, type: 'set', id: 'revokeM'})
+                .c('query', {xmlns: 'http://jabber.org/protocol/muc#admin'})
+                .c('item', {jid: myjid, affiliation: 'none'})
+                .c('reason').t('You are not anymore member of this room').up().up().up();
+            this.connection.sendIQ(
+                revokeMembershipIQ,
+                function (result) {
+                    console.log('Revoked membership to jid: ', jid, result);
+                },
+                function (error) {
+                    console.log('Error revoking membership to: ', jid, error);
+                });    
+        },
+
+        kick: function (jid, reason) {
             var kickIQ = $iq({to: this.roomjid, type: 'set'})
                 .c('query', {xmlns: 'http://jabber.org/protocol/muc#admin'})
                 .c('item', {nick: Strophe.getResourceFromJid(jid), role: 'none'})
-                .c('reason').t('You have been kicked.').up().up().up();
+                .c('reason').t(reason).up().up().up();
 
             this.connection.sendIQ(
                 kickIQ,
@@ -514,6 +678,7 @@ module.exports = function(XMPP, eventEmitter) {
 
         },
 
+        // destroy jabber room when performer exit the show
         destroyRoom: function () {
              
              var reason_by_role = 'Any participant has been notified. See you soon!'
@@ -537,6 +702,57 @@ module.exports = function(XMPP, eventEmitter) {
         onModerationGranted: function (jid) {
 
         },
+
+        // Updates Room Status on django page
+        updateOpenRoom:function(roomName, roomType, callback){
+            var httpRequest = new XMLHttpRequest();
+            
+            var payload = new Object();
+            payload.room = ROOM_ID;
+            payload.roomType  = roomType;
+            var requestBody= JSON.stringify(payload);
+            
+                httpRequest.onreadystatechange = function(){ 
+                   if (httpRequest.readyState === 4 &&
+                           httpRequest.status === 300){
+                   callback.call(JSON.parse(httpRequest.responseText)); 
+                }
+            };
+            
+            var csrftoken = getCookie('csrftoken');
+            
+            httpRequest.open('PUT', "http://" + HOSTNAME + "/openrooms/" + OPENROOM_ID);
+            httpRequest.setRequestHeader("X-CSRFToken", csrftoken);
+            httpRequest.setRequestHeader('Content-Type', 'application/json');
+            httpRequest.send(requestBody);
+        },
+
+        registerShowRequest: function(roomInstance, userId, showType, callback){
+            var httpRequest = new XMLHttpRequest();
+            
+            var payload = new Object();
+            payload.room = roomInstance;
+            payload.user  = userId;
+            payload.requestType = showType;
+            var requestBody= JSON.stringify(payload);
+            
+                httpRequest.onreadystatechange = function(){ 
+                   if (httpRequest.readyState === 4 &&
+                           httpRequest.status === 300){
+                   callback.call(JSON.parse(httpRequest.responseText)); 
+                }
+            };
+            
+            var csrftoken = getCookie('csrftoken');
+            
+            httpRequest.open('POST', "http://" + HOSTNAME + "/showrequests/");
+            httpRequest.setRequestHeader("X-CSRFToken", csrftoken);
+            httpRequest.setRequestHeader('Content-Type', 'application/json');
+            httpRequest.send(requestBody);
+        },
+
+
+
 
         sendPresence: function () {
             var pres = $pres({to: this.presMap['to'] });
@@ -775,4 +991,20 @@ module.exports = function(XMPP, eventEmitter) {
         }
     });
 };
+
+function getCookie(name) {
+    var cookieValue = null;
+    if (document.cookie && document.cookie != '') {
+        var cookies = document.cookie.split(';');
+        for (var i = 0; i < cookies.length; i++) {
+            var cookie = jQuery.trim(cookies[i]);
+            // Does this cookie string begin with the name we want?
+            if (cookie.substring(0, name.length + 1) == (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
 

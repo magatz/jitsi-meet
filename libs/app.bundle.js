@@ -831,6 +831,8 @@ var RTC = {
             callback = null
             APP.xmpp.setVideoMute(true, callback)
             APP.xmpp.setAudioMute(true, callback)
+            
+
 
         }
 
@@ -1410,14 +1412,36 @@ function registerListeners() {
     APP.connectionquality.addListener(CQEvents.STOP,
         VideoLayout.onStatsStop);
     APP.xmpp.addListener(XMPPEvents.DISPOSE_CONFERENCE, onDisposeConference);
-    APP.xmpp.addListener(XMPPEvents.KICKED, function () {
-        messageHandler.openMessageDialog("Session Terminated",
-            "Ouch! You have been kicked out of the meet!");
+
+    APP.xmpp.addListener(XMPPEvents.KICKED, function(reason){
+        specMsg = reason
+        messageHandler.openDialog(
+            "Session Terminated",
+            reason,
+            true,
+            {"OK": true},
+            function (event, value, message, formVals)
+            {
+                console.log("Choosing destination pathname")
+                window.location.pathname = "../../hot/";
+                return false;
+            }
+        )
     });
-    APP.xmpp.addListener(XMPPEvents.BANNED, function () {
-        messageHandler.openMessageDialog("Session Terminated",
-            "You have been banned from this room! Only the performer or Admin can revoke this banning. Please contact us for any complaint");
-            
+
+    APP.xmpp.addListener(XMPPEvents.BANNED, function(){
+        messageHandler.openDialog(
+            "Session Terminated",
+            "You have been banned from this room! Only the performer or Admin can revoke this banning. Please contact us for any complaint",
+            true,
+            {"OK": true},
+            function (event, value, message, formVals)
+            {
+                console.log("Choosing destination pathname")
+                window.location.pathname = "../../hot/";
+                return false;
+            }
+        )
     });
     
     APP.xmpp.addListener(XMPPEvents.MUC_DESTROYED, function (reason) {
@@ -1438,7 +1462,7 @@ function registerListeners() {
             function (event, value, message, formVals)
             {
                 console.log("Choosing destination pathname")
-                if (ROLE == "watcher"){
+                if (Strophe.getResourceFromJid(APP.xmpp.myJid()) != PERFORMER){
                     window.location.pathname = "../../hot/";
                 }
                 else {
@@ -1451,32 +1475,270 @@ function registerListeners() {
     }, 1500);
     });
 
-    APP.xmpp.addListener(XMPPEvents.PRIVATE_AVAILABILITY, function (private_token_per_min) {
-        //devo sapere quanti token ha lo user, se sono meno del limite fissato dal performer allora nessun messaggio
-        messageHandler.openMessageDialog(
-            "Nice news!",
-            "The performer is available for a private show. The price per min is: " + private_token_per_min,
-            true,
-            {'OK': true},
-            function (event){
-                return false;
+    APP.xmpp.addListener(XMPPEvents.PRIVATE_AVAILABILITY, function (from, nick, private_token_per_min, private_spy_per_min, min_balance_private) {
+        if (ROLE != "performer"){
+            //devo sapere quanti token ha lo user, se sono meno del limite fissato dal performer allora nessun messaggio
+            var get_url = "/userdetails/" + userAccountId;
+             $.getJSON(get_url, function(result){
+                if (parseFloat(result.balance) > parseFloat(min_balance_private)){
+                    messageHandler.openMessageDialog(
+                    "Nice news!",
+                    "The performer is available for a private show. The price per minute is: " + private_token_per_min + " tokens",
+                    true,
+                    {'OK': true},
+                    function (event){
+                        return false;
+                    });
+                }
             });
-        console.log("private show msg has been received")    
+        }    
     });
 
-    APP.xmpp.addListener(XMPPEvents.TICKET_AVAILABILITY, function (min_users_per_group, full_ticket_price, ) {
-        //devo sapere quanti token ha il user... se sono meno del prezzo del biglietto allora nessun messaggio
-        messageHandler.openMessageDialog(
-            "Nice news!",
-            "The performer is available for a ticket show. The price for one ticket is: " + (full_ticket_price / min_users_per_group) + 
-            "Click on on toolbar button to request a ticket show to the performer",
-            true,
-            {'OK': true},
-            function (event){
-                return false;
+    APP.xmpp.addListener(XMPPEvents.PRIVATE_SHOW_REQUEST_RECEIVED, function(from, body){
+        if (ROLE == "performer"){
+            bootbox.dialog({
+              message: body,
+              title: "Private Show Request",
+              buttons: {
+                success: {
+                  label: "OK I'm ready",
+                  className: "btn-success",
+                  callback: function() {
+                    console.log("Performer says ok");
+                    plain_from = Strophe.getResourceFromJid(from);
+                    preparePrivateRoom(plain_from);
+                  }
+                },
+                danger: {
+                  label: "No thanks, not now.",
+                  className: "btn-danger",
+                  callback: function() {
+                    // send a PM to the user informing he is not available at that time
+                    console.log("Performer says NO");
+                    plain_from = Strophe.getResourceFromJid(from);
+                    body = "Sorry, " + plain_from + ", at this time I'm not available for private shows. Try again later";
+                    recipient = from;
+                    from = APP.xmpp.myJid();
+                    kind = "private";
+                    APP.xmpp.sendDirectRequest(body, from, recipient, kind);
+                  }
+                },
+                main: {
+                  label: "Maybe later!",
+                  className: "btn-primary",
+                  callback: function() {
+                    // send a PM to the user informing he will contact later
+                    console.log("Performer says maybe later");
+                    plain_from = Strophe.getResourceFromJid(from);
+                    body = "Sorry, " + plain_from + ", I'm busy now but, please, try again later";
+                    recipient = from;
+                    from = APP.xmpp.myJid();
+                    kind = "private";
+                    APP.xmpp.sendDirectRequest(body, from, recipient, kind);
+                  }
+                }
+              }
             });
-        console.log("show ticket msg has been received")    
+        }    
     });
+    
+    
+    APP.xmpp.addListener(XMPPEvents.TICKET_AVAILABILITY, function (from, nick, min_users_per_group, group_token_per_min, full_ticket_price) {
+         if (ROLE != "performer"){
+        //devo sapere quanti token ha il user... se sono meno del prezzo del biglietto allora nessun messaggio
+        var get_url = "/userdetails/" + userAccountId;
+        $.getJSON(get_url, function(result){
+            if (parseFloat(result.balance) > parseFloat(full_ticket_price) / parseFloat(min_users_per_group)){
+            messageHandler.openMessageDialog(
+                "Nice news!",
+                "The performer is available for a ticket show. The price for one ticket is: " + (full_ticket_price / min_users_per_group) +"tokens. " +"Click on on toolbar button to request a ticket show to the performer",
+                true,
+                {'OK': true},
+                function (event){
+                    return false;
+                    });
+                }
+            });
+        }    
+    });
+
+    APP.xmpp.addListener(XMPPEvents.PRIVATE_SHOW_STARTING, function (from, txt, action){
+        // Open a modal, requesting to share or not his cam
+        bootbox.dialog({
+          message: "If you want to share your webcam during this private show, please confirm with the buttons below",
+          title: "Share your webcam",
+          onEscape: function() {
+            // leave cam off, start counter, and periodic transfer
+            cam = false;
+            counter =true;
+            transfer=true;
+            setupPrivateRoom(cam, counter, transfer);
+          },
+          buttons: {
+            success: {
+              label: "No, thanks!",
+              className: "btn-default",
+              callback: function() {
+                // start counter, and periodic transfer
+                cam = false;
+                counter =true;
+                transfer=true;
+                setupPrivateRoom(cam, counter, transfer);
+              }
+            },
+            
+            main: {
+              label: "Yes",
+              className: "btn-primary",
+              callback: function() {
+                //turn off camera sharing, start counter, and periodic transfer
+                cam = true;
+                counter =true;
+                transfer=true;
+                setupPrivateRoom(cam, counter, transfer);
+              }
+            }
+          }
+        });
+    });
+
+    APP.xmpp.addListener(XMPPEvents.SPY_SHOW_STARTING, function(from, txt, action){
+      //show dialog only when receiving message from performer
+      if ( Strophe.getResourceFromJid(from) == PERFORMER){
+        console.log("Showing dialog on message sent by: " + from);
+        bootbox.dialog({
+            message: "The show is starting. You will not be able to interact in any way with the other users",
+            title: "Ready to Spy!",
+            onEscape: function() {
+                  //simply go back to room list
+                  windows.location.pathname = '/hot/';
+              
+            },
+            buttons: {
+              success: {
+                label: "Cancel",
+                className: "btn-default",
+                callback: function() {
+                  //simply go back to room list
+                  windows.location.pathname = '/hot/';    
+                }
+              },
+              
+              main: {
+                label: "Yes",
+                className: "btn-primary",
+                callback: function() {
+                  //hide buttons (Chat, Targets, Private, Ticket) and start time with periodic transfer
+                  
+                  setupSpyRoom();
+                }
+              }
+            }
+          });
+       } 
+
+    });
+    
+    APP.xmpp.addListener(XMPPEvents.TICKET_SHOW_STARTING, function (from, txt, price){
+        if (ROLE == "watcher"){
+            // Open a modal
+            bootbox.dialog({
+              message: txt,
+              title: "Confirm",
+              onEscape: function() {
+                
+                // Remove user from members
+                APP.xmpp.revokeMembership(APP.xmpp.myJid);
+                window.location.pathname = "../../hot/";
+              },
+              buttons: {
+                success: {
+                  label: "Cancel",
+                  className: "btn-default",
+                  callback: function() {
+                    // Remove user from members
+                    APP.xmpp.revokeMembership(APP.xmpp.myJid);
+                    window.location.pathname = "../../hot/";
+                
+                  }
+                },
+                
+                main: {
+                  label: "Confirm",
+                  className: "btn-primary",
+                  callback: function() {
+                    //make payment ...
+                    Toolbar.makeInroomPayment('ticket_show');
+                    $('#toolbar_button_show_target').hide();
+                    $('#toolbar_button_reqPrivate').hide();
+                    $('#toolbar_button_reqTicket').hide();
+
+                
+                  }
+                }
+              }
+            });
+        }
+    });
+
+    APP.xmpp.addListener(XMPPEvents.TICKET_SHOW_REQUEST_RECEIVED, function(from, body){
+        // need to count the ticket requests, via a put to django RoomInstances
+        // when the number of requests from differnt users reaches the minimum
+        // it has to notify the performer with the text message
+        if (ROLE == "performer"){
+        
+            //GET of all requests for this room instance in order to inform the performer
+            instance_url = "/showrequests?roomInstance="+ROOM_INSTANCE;
+            $.getJSON(instance_url, function(result){
+                var new_body = result.length ; 
+                bootbox.dialog({
+                  message: body + ". Currently you have " + new_body + " ticket show requests" ,
+                  title: "Ticket Show Request",
+                  buttons: {
+                    success: {
+                      label: "OK I'm ready",
+                      className: "btn-success",
+                      callback: function() {
+                        console.log("Performer says ok");
+                        prepareTicketRoom(result);
+                      }
+                    },
+                    danger: {
+                      label: "No thanks, not now.",
+                      className: "btn-danger",
+                      callback: function() {
+                        // send a PM to the user informing he is not available at that time
+                        console.log("Performer says NO");
+                        console.log("Performer says NO");
+                        plain_from = Strophe.getResourceFromJid(from);
+                        body = "Sorry, " + plain_from + ", at this time I'm not available for Ticket shows. Try again later";
+                        recipient = from;
+                        from = APP.xmpp.myJid();
+                        kind = "private";
+                        APP.xmpp.sendDirectRequest(body, from, recipient, kind);
+                      }
+                    },
+                    main: {
+                      label: "Maybe later!",
+                      className: "btn-primary",
+                      callback: function() {
+                        // send a PM to the user informing he will contact later
+                        console.log("Performer says maybe later");
+                        plain_from = Strophe.getResourceFromJid(from);
+                        body = "Sorry, " + plain_from + ", I'm busy now but, please, try again later";
+                        recipient = from;
+                        from = APP.xmpp.myJid();
+                        kind = "private";
+                        APP.xmpp.sendDirectRequest(body, from, recipient, kind);
+                      }
+                    }
+                  }
+                });
+            //end of getJSON
+            });
+        }    
+    });
+    
 
 
     APP.xmpp.addListener(XMPPEvents.BRIDGE_DOWN, function () {
@@ -1535,6 +1797,7 @@ function registerListeners() {
  * specifies whether the method was initiated in response to a user command (in
  * contrast to an automatic decision taken by the application logic)
  */
+
 function setVideoMute(mute, options) {
     APP.xmpp.setVideoMute(
         mute,
@@ -1696,9 +1959,228 @@ function chatSetSubject(text)
     return Chat.chatSetSubject(text);
 };
 
-function updateChatConversation(from, displayName, message) {
-    return Chat.updateChatConversation(from, displayName, message);
+function updateChatConversation(from, displayName, message, room, type) {
+    return Chat.updateChatConversation(from, displayName, message, room, type);
 };
+
+function preparePrivateRoom(for_user) { 
+    // mark the room as private, so none on the rooms page can enter anymore (via django rest service)
+    APP.xmpp.updateOpenRoom(ROOM_NAME, 'PRI');
+
+    // get room occupants and kick them off with proper message, leaving only perfomer and requesting user
+    var members = APP.xmpp.getMembers();
+    Object.keys(members).forEach(function (key){
+        if (Strophe.getResourceFromJid(key) != for_user ){
+            if(Strophe.getResourceFromJid(key) != 'focus'){
+                //Kicking any user different for the one that has requested the private show
+                reason = "A Private show is starting. If you want to spy the show (payment), you need to go back a nd join from the room list";
+                APP.xmpp.eject(key,reason);
+                console.log("Ejecting user: " + Strophe.getResourceFromJid(key));
+                }
+            }
+        }
+    );
+
+    // make the room members only (strophe)
+    APP.xmpp.makeRoomMembersOnly(
+        function(res){
+            console.log("Room is now members-only");
+        },
+        function(err){
+            console.log("Error in setting room members-only");
+            messageHandler.showError(
+                'Error',
+                'Error in setting room members-only');
+        },
+        function(){
+            console.warn('Members-only rooms are currently not supported.');
+            messageHandler.showError(
+                'Warning',
+                'Members-only rooms are currently not supported.');
+        });
+    // fire an EVENT for requesting the paying user to share his cam etc...
+    body = "Ready for the show. Choose if you want to share your webcam with the performer, with the buttons below"
+    from = APP.xmpp.myJid();
+    recipient = Strophe.getBareJidFromJid(from) + "/" + for_user;
+    kind = "hidden";
+    action = "user_choose_video_sharing"
+
+    APP.xmpp.sendHiddenDirectMessage(body, from, recipient, kind, action);
+}
+
+function findNoTicketRequest(peer, reqs){
+    var req;
+    reqs.some(function(i){
+        if (i.username == peer ){
+            req = peer
+            return true;
+        }
+    });
+    return req;
+}
+
+
+function prepareTicketRoom(users){
+    // mark the room as Ticket Show, and let people enter only if the pay the ticket
+    APP.xmpp.updateOpenRoom(ROOM_NAME, 'TIK');
+    // make changes to grid template ... open a js modal and ask if they want to buy...
+    
+    // get room occupants and kick them off with proper message, leaving only perfomer and paying users
+    // users is an array
+    var members = APP.xmpp.getMembers();
+    
+    Object.size = function(obj){
+        var size = 0, key;
+            for (key in obj){
+                if (obj.hasOwnProperty(key)) size ++
+            }
+        return size;
+    };
+
+    var membersSize = Object.size(members) - 1;
+
+    if (membersSize == users.length){
+        console.log("any member is requesting a ticket show!!!")    
+    }
+    else{
+        Object.keys(members).forEach(function(key){
+            peer = Strophe.getResourceFromJid(key);
+            if (findNoTicketRequest(peer, users) != peer){
+                console.log(key + " is to be kicked since doesnt' want a group show");
+                reason = "A ticket show is starting. You can buy a ticket from the open rooms page.";
+                APP.xmpp.eject(key, reason);
+            }
+        });
+    }
+
+    // make the room members only (in order to avoid cheaters)
+    APP.xmpp.makeRoomMembersOnly(
+        function(res){
+            console.log("Room is now members-only");
+        },
+        function(err){
+            console.log("Error in setting room members-only");
+            messageHandler.showError(
+                'Error',
+                'Error in setting room members-only');
+        },
+        function(){
+            console.warn('Members-only rooms are currently not supported.');
+            messageHandler.showError(
+                'Warning',
+                'Members-only rooms are currently not supported.');
+    });
+    var get_url = "/performerprofile/" + PERFORMER_XMPP_ID;
+    
+    // sends a message to users that have requested a ticket to confirm purchase
+    $.getJSON(get_url, function(result){
+        var min_users_per_group = result.min_users_per_group;
+        var full_ticket_price = result.full_ticket_price;
+        
+        price = full_ticket_price / parseInt(min_users_per_group);
+        body = "The show is going to start, as soon as you will pay the ticket with button below. Or you can Cancel and exit the room. The price is:" + price;         
+        nickname = Strophe.getResourceFromJid(APP.xmpp.myJid());
+        APP.xmpp.sendTicketShowStarting(body, nickname, price);        
+          
+    });
+}
+
+function setupSpyRoom(){
+    // Show the timer
+    var timer= $("#timer");
+    timer.toggleClass("hidden");
+    
+    // hide Chat, Targets, Private, Ticket buttons
+    $('#toolbar_button_chat').hide();
+    $('#toolbar_button_show_target').hide();
+    $('#toolbar_button_reqPrivate').hide();
+    $('#toolbar_button_reqTicket').hide();
+
+    timerManagement(kind='spy');
+}
+
+
+function setupPrivateRoom(cam, counter, transfer){
+    if (cam==true){
+        
+        APP.xmpp.setVideoMute(false, function(){
+            console.log("A/V active now");
+            }
+        );
+        APP.xmpp.setAudioMute(false, function(){
+            console.log("A/V active now");
+            }
+        );
+        var filmstrip = $("#remoteVideos");
+        filmstrip.toggleClass("hidden");
+
+
+
+        // Need to understand better how to enable the local stream
+        /*var localVideo = document.createElement('video');
+        localVideo.id = 'localVideo_' +
+            APP.RTC.getStreamID(stream.getOriginalStream());
+        localVideo.autoplay = true;
+        localVideo.volume = 0; // is it required if audio is separated ?
+        localVideo.oncontextmenu = function () { return false; };
+        var localVideoContainer = document.getElementById('localVideoWrapper');
+        localVideoContainer.appendChild(localVideo);*/
+
+    }
+    // now we show the counter
+     var timer= $("#timer");
+    timer.toggleClass("hidden");
+    $('#toolbar_button_show_target').hide();
+    $('#toolbar_button_reqPrivate').hide();
+    $('#toolbar_button_reqTicket').hide();
+
+    // calling periodic function to update timer and to transfer funds
+    timerManagement(kind='private');
+
+
+}
+
+function pad(val) {
+    return val > 9 ? val : "0" + val;
+}
+
+function timerManagement(kind){
+    // first payment at show start
+    if (kind == 'private'){
+      Toolbar.makeInroomPayment('private_show');
+    }
+    else if (kind == 'spy'){
+      Toolbar.makeInroomPayment('spy_show')    
+    }
+
+    // the make paymentevery 1000 milliseconds
+    var sec = 0;
+
+    var timer = setInterval(function () {
+        secs = pad(++sec % 60)
+        document.getElementById("seconds").innerHTML = secs ;
+        mins = pad(parseInt(sec / 60, 10));
+        document.getElementById("minutes").innerHTML = mins;
+        if (secs == '59'){
+            console.log( mins +": passed");
+            if (kind == 'private'){
+                Toolbar.makeInroomPayment('private_show');
+            }
+            else if (kind == 'spy'){
+                Toolbar.makeInroomPayment('spy_show')    
+            }
+        };
+
+    }, 1000);
+
+
+} 
+
+function makePrivateTransfer(){
+    //usare il servzio REST su /buy, verificare i parametri da passare
+
+};
+
 
 function onMucJoined(jid, info) {
     Toolbar.updateRoomUrl(window.location.href);
@@ -1713,6 +2195,11 @@ function onMucJoined(jid, info) {
 
     // Once we've joined the muc show the toolbar
     ToolbarToggler.showToolbar();
+
+    // need to hide the timer button if the room is not private
+    var timer= $("#timer");
+    timer.toggleClass("hidden");
+
 
     // Show authenticate button if needed
     Toolbar.showAuthenticateButton(
@@ -1812,10 +2299,39 @@ function onPasswordReqiured(callback) {
         }
     );
 }
+
 function onMucEntered(jid, id, displayName) {
     messageHandler.notify(displayName,'notify.somebody', "Somebody",
         'connected',
         'notify.connected', "connected");
+
+    // Check if the room is private and members only
+    // in such case, the entered jid is in spy mode:
+    // need to send him a direct message triggering the counter
+    // with spyrate, and hide the following buttons:
+    // Chat, Targets, Private, Ticket
+
+
+    // Action triggered only is user is performer 
+    if (Strophe.getResourceFromJid(APP.xmpp.myJid()) == PERFORMER){
+        room = Strophe.getBareJidFromJid(APP.xmpp.myJid());
+        thisRoom= room.split('@')[0];
+        url= "/activerooms/" + OPENROOM_ID;
+        $.getJSON(url, function(result){
+            if (result.roomType == "PRI" && thisRoom == ROOM_NAME){
+                body = "Ready for the Spy show!"
+                from = APP.xmpp.myJid();
+                recipient = jid;
+                kind = "hidden";
+                action = "user_in spy_mode"
+
+                APP.xmpp.sendHiddenDirectMessage(body, from, recipient, kind, action);
+                console.log("Sending message for spy show to: " + recipient);
+
+            }
+        })
+    }
+    
 
     // Add Peer's container
     VideoLayout.ensurePeerContainerExists(jid,id);
@@ -4197,18 +4713,24 @@ var Chat = (function (my) {
     /**
      * Appends the given message to the chat conversation.
      */
-    my.updateChatConversation = function (from, displayName, message) {
+    my.updateChatConversation = function (from, displayName, message, room, type) {
         var divClassName = '';
         var performerFullName = ROOM_NAME + "@" + config.hosts.muc + "/" + PERFORMER;
         // if message is coming from the Performer, mark it in red
-        if (from == performerFullName) {
-            divClassName = "performeruser";   
+        if (type == 'chat'){
+            displayName = "Private message from " + displayName;
+            divClassName = "directMessage";
+            
         }
-        // else leave message blank
         else {
-            divClassName = "watcheruser";
+            if (from == performerFullName ) {
+                divClassName = "performeruser";   
+            }
+            // else leave message blank
+            else {
+                divClassName = "watcheruser";    
+            }
         }
-
         if (!Chat.isVisible()) {
                 unreadMessages++;
                 UIUtil.playSoundNotification('chatNotification');
@@ -4730,9 +5252,10 @@ function createModalMod(peerJid, peerRole){
             ejectBtn.className = "btn btn-warning";
             ejectBtn.id = "ejectBtnItem";
             ejectBtn.innerText = "Kick-Off";
+            var reason = "You have been kicked-off the meeting,for your bad behaviour";
             ejectBtn.onclick = function(){
                 var this_jid = $('#user_jid').val();
-                APP.xmpp.eject(this_jid);
+                APP.xmpp.eject(this_jid, reason);
                 //popupmenuElement.setAttribute('style', 'display:none;');
             };
             modalButtons.appendChild(ejectBtn);
@@ -5238,7 +5761,7 @@ var buttonHandlers =
     },
     "toolbar_button_room_tip": function (event) {
         event.preventDefault();
-        return give_tip();
+        return makeInroomPayment();
     },
     "toolbar_button_target": function (event) {
         event.preventDefault();
@@ -5251,9 +5774,9 @@ var buttonHandlers =
         return notify_users_for_privateshow();
     },
     "toolbar_button_ticket_show": function(event) {
-        return notify_users_ticket_show()
+        return notify_users_for_ticket_show()
     },
-    "toolbar_button_reqticket": function(event) {
+    "toolbar_button_reqTicket": function(event) {
         return reqTicket();
 
     },
@@ -5263,55 +5786,184 @@ var buttonHandlers =
 
 };
 
-function notify_users_for_ticketshow(){
+function notify_users_for_privateshow(){
     // need to get the performer parameters
     var get_url = "/performerprofile/" + PERFORMER_XMPP_ID;
-
+    
     $.getJSON(get_url, function(result){
+        
         var private_token_per_min = result.private_token_per_min;
         var private_spy_per_min = result.private_spy_per_min;
         var min_balance_private = result.min_balance_private;
+
+        var msg1 = "Available for private shows! \n Price per minute is: " + private_spy_per_min.toString() + "\n" ;
+        var msg2 = "Minimum tokens needed are: " + min_balance_private.toString(); 
+        var message = msg1.concat(msg2);
+
+        // I'm sending my availabiluty for private show with my rate and min balance available
+        APP.xmpp.sendPriShowMessage(
+            message,
+            PERFORMER,
+            private_token_per_min,
+            min_balance_private,
+            private_spy_per_min                   
+        );           
     });
-
-    var msg1 = "Available for private shows! Price per minute is: " + private_spy_per_min.toString() ;
-    var msg2 = " The minimum balance available is: " + min_balance_private.toString(); 
-    var message = msg1.concat(msg2);
-
-    // I'm sending my availabiluty for private show with my rate and min balance available
-    APP.xmpp.sendPriShowMessage(
-        "pippo",
-        private_token_per_min,
-        min_balance_private,
-        private_spy_per_min                   
-    );           
 };
 
-function notify_users_for_ticketshow(){
-// need to get the performer parameters
+
+function notify_users_for_ticket_show(){
+    // need to get the performer parameters
     var get_url = "/performerprofile/" + PERFORMER_XMPP_ID;
+        
     $.getJSON(get_url, function(result){
         var min_users_per_group = result.min_users_per_group;
         var group_token_per_min = result.group_token_per_min;
         var full_ticket_price = result.full_ticket_price;
-       
+        
+        var msg1 = "I'm available for ticket shows! \n Price for any users is: " + (full_ticket_price / parseInt(min_users_per_group)) + "\n";
+        var msg2 = "The minimum number of users is: " + min_users_per_group; 
+        var message = msg1.concat(msg2);
+        
+        // I'm sending my availabiluty for ticket show with my rate and min balance available
+        APP.xmpp.sendTickShowMessage(
+            message,
+            PERFORMER, 
+            min_users_per_group,
+            group_token_per_min,
+            full_ticket_price
+        );   
     });
-
-    // I'm sending my availabiluty for ticket show with my rate and min balance available
-    APP.xmpp.sendPriShowMessage(
-        "I'm available for ticket shows! Price for any users " + (full_ticket_price / parseInt(min_users_per_group)) +" The Minimum users number is " + min_users_per_group ,
-        min_users_per_group,
-        group_token_per_min,
-        full_ticket_price
-    );           
 };
 
 
 function reqPrivate(){
+    // send a direct message to performer,requesting a private show, providing my balance
+    var get_url_user = "/userdetails/" + userAccountId;
+    var get_url_performer = "/performerprofile/" + PERFORMER_XMPP_ID;
+    $.getJSON(get_url_user, function(u_result){
+        $.getJSON(get_url_performer, function(p_result){
+            if (parseFloat(u_result.balance) < parseFloat(p_result.min_balance_private)){
+                messageHandler.openTwoButtonDialog(
+                    "Buy more tokens!",
+                    "The performer is available for a private show. But you don't have enough tokens!",
+                    true,
+                    'Buy tokens',
+                    function (event){
+                        //function on Buy tokens button
+                        url = " ../../../account/buy/";
+                        window.open(url,'_target');
+                    },
+                    function (event){
+                        //function on loaded
+                        return false;
+                    },
+                    function (event){
+                        //function on closed 
+                        return false;
+                    }
 
-};
+                    );
+
+            }
+            else {
+                messageHandler.openTwoButtonDialog(
+                    "Ready to go",
+                    "Press 'Notify performer' button, to request a private show. The performer will soon answer",
+                    true,
+                    'Notify performer',
+                    function (event){
+                        //function on Notify performer button
+                        //need to get the performer jid
+                        body = USER + " wants a private show. Please respond with the buttons below";
+                        from = APP.xmpp.myJid();
+                        recipient = APP.xmpp.findJidFromResource(PERFORMER);
+                        kind = "private";
+                        APP.xmpp.sendDirectRequest(body, from, recipient,kind);
+                    },
+                    function (event){
+                        //function on loaded
+                        return false;
+                    },
+                    function (event){
+                        //function on closed 
+                        return false;
+                    }
+
+                    );
+
+            }
+        });
+    });
+};    
 
 
 function reqTicket(){
+    // send a direct message to performer,requesting a private show, providing my balance
+    var get_url_user = "/userdetails/" + userAccountId;
+    var get_url_performer = "/performerprofile/" + PERFORMER_XMPP_ID;
+    $.getJSON(get_url_user, function(u_result){
+        $.getJSON(get_url_performer, function(p_result){
+            if (parseFloat(u_result.balance) < parseFloat(p_result.full_ticket_price) / parseFloat(p_result.min_users_per_group)){
+                
+                // message to performer
+                messageHandler.openTwoButtonDialog(
+                    "Buy more tokens!",
+                    "The performer is available for a ticket show. But you don't have enough tokens!",
+                    true,
+                    'Buy tokens',
+                    function (event){
+                        //function on Buy tokens button
+                        url = " ../../../account/buy/";
+                        window.open(url,'_target');
+                    },
+                    function (event){
+                        //function on loaded
+                        return false;
+                    },
+                    function (event){
+                        //function on closed 
+                        return false;
+                    }
+
+                    );
+
+            }
+            else {
+                //PUT of showrequest to the django REST service
+                roomInstance = ROOM_INSTANCE;
+                userId = USER_ID ;
+                showType = 'TIK'
+                
+                APP.xmpp.registerShowRequest(roomInstance, userId, showType);
+              
+                messageHandler.openTwoButtonDialog(
+                    "Ready to go",
+                    "Press 'Notify performer' button, to request a ticket show. The performer will soon answer",
+                    true,
+                    'Notify performer',
+                    function (event){
+                        //function on Notify performer button
+                        //need to get the performer jid
+                        body = USER + " wants a Ticket (group) show. Please respond with the buttons below";
+                        from = APP.xmpp.myJid();
+                        recipient = APP.xmpp.findJidFromResource(PERFORMER);
+                        kind = "ticket";
+                        
+                        APP.xmpp.sendDirectRequest(body, from, recipient, kind);
+                    },
+                    function (event){
+                        //function on loaded
+                        return false;
+                    },
+                    function (event){
+                        //function on closed 
+                        return false;
+                    }
+                );
+            }
+        });
+    });
 
 }; 
 
@@ -5696,22 +6348,49 @@ function createModal(){
 
 
 
-function give_tip() {
+function makeInroomPayment(type_id) {
 
     var model_object = $('.object_item').attr('id');
-    var user
+    if (type_id){
+        model_object = type_id;
+    }
     // get the id (pk) of the object to buy
     if (model_object == 'toolbar_button_room_tip') {
         var item_id = ROOM_ID;
         var item_price = $('.buy_field').val();
         var performer_id = PERFORMER_ID;
         var get_url = "/userdetails/" + userAccountId;
+        
     }
+    else if(model_object == "private_show"){
+        var item_id = ROOM_ID;
+        var item_price = PRIVATE_RATE;
+        var performer_id = PERFORMER_ID;
+        var get_url = "/userdetails/" + userAccountId;
+        
+    }
+    else if(model_object == "ticket_show"){
+        var item_id = ROOM_ID;
+        var item_price = TICKET_PRICE;
+        var performer_id = PERFORMER_ID;
+        var get_url = "/userdetails/" + userAccountId;
+      
+
+    }
+        else if(model_object == "spy_show"){
+        var item_id = ROOM_ID;
+        var item_price = SPY_RATE;
+        var performer_id = PERFORMER_ID;
+        var get_url = "/userdetails/" + userAccountId;
+        
+    }
+
     else {
         var item_id = $(this).attr('id');
-        var item_price = $(this).attr('price');
+        var item_price = $('.buy_field').val();
         var performer_id = 0;
         var get_url = "/userdetails/" + userAccountId;
+        
     }
 
     console.log("userAccountId: " + get_url);
@@ -5725,8 +6404,29 @@ function give_tip() {
             
         if (parseFloat(result.balance) < parseFloat(item_price)){
             console.log('Balance is: ' + result.balance);
-            custom_alert("Want to buy more tokens?", "Not enough funds!");
-        }   
+            
+               messageHandler.openTwoButtonDialog(
+                    "Not enough funds!",
+                    "Want to buy more tokens?",
+                    true,
+                    'OK',
+                    function (event){
+                        //function on OK
+                        url = " ../../../account/buy/";
+                        window.open(url,'_target');
+                    },
+                    function (event){
+                        //function on loaded
+                        return false;
+                    },
+                    function (event){
+                        //function on closed 
+                       window.location.replace('../../../hot') 
+                    });
+
+                    
+                }
+               
         
         else if (parseFloat(result.balance) >= parseFloat(item_price)) {
             console.log('Balance is: ' + result.balance);
@@ -5749,6 +6449,15 @@ function post_to_view(item_id, model_object, item_price, performer_id, balance){
         redirect_url = '../../../buy/gallery/ok/'+ item_id; 
     }
     else if (model_object == 'toolbar_button_room_tip') {
+        redirect_url = "." ;
+    }
+    else if (model_object == 'private_show') {
+        redirect_url = "." ;
+    }
+    else if (model_object == 'ticket_show') {
+        redirect_url = "." ;
+    }
+    else if (model_object == 'spy_show') {
         redirect_url = "." ;
     }
 
@@ -5785,8 +6494,8 @@ function post_to_view(item_id, model_object, item_price, performer_id, balance){
             success: function(json) {console.log('Server Response: ' + json.server_response);},
             error : function(xhr,errmsg,err) {console.log(xhr.status + ": " + xhr.responseText);}, 
             complete: function (json) {
-                if (model_object != 'toolbar_button_room_tip'){    
-                    window.location.href = redirect_url ;
+                if (model_object == 'videoOpenfire' ||  model_object == 'GalleryOpenfire'){    
+                    window.location.href = redirect_url;
                 }
                 else {
                     var new_balance = parseFloat(balance) - parseFloat(item_price);
@@ -5813,14 +6522,24 @@ function post_to_view(item_id, model_object, item_price, performer_id, balance){
                             success: function(json) {console.log('Server Response: ' + json.server_response);},
                             error : function(xhr,errmsg,err) {console.log(xhr.status + ": " + xhr.responseText);},
                             complete: function(json) {
+                                if (model_object == "spy_show" || model_object == "private_show"){
+                                     var notify = false;
+                                     console.log ("notify = " + notify);
+                                }
+                                else {
+                                    var notify = true;
+                                    console.log ("notify = " + notify);
+                                }
                                 // I'm sending the Tip notification to the chat after updating the room instance credits!                    
                                 APP.xmpp.sendTipMessage(
                                     "I have tipped  (" + item_price + ") tokens, enjoy ;)",
                                     USER,
                                     item_price,
-                                    new_balance                                
+                                    new_balance,
+                                    notify                                
                                     
-                                );              
+                                );
+                                                  
                             }
 
                         });    
@@ -5879,6 +6598,7 @@ function hangup() {
         { "Confirm?": true },
         function(event, value, message, formVals)
         {
+            APP.xmpp.makeRoomNotMembersOnly();
             APP.xmpp.destroyRoom();
         });
     return false; 
@@ -5896,7 +6616,7 @@ function deleteOpenRoom(roomName, callback){
     
     var csrftoken = getCookie('csrftoken');
     // authstrt = 'Basic ' + btoa("Technical_Staff" + ':' + "MySv3vA17"); 
-    httpRequest.open('DELETE', "http://" + HOSTNAME + "/openrooms/" + roomName);
+    httpRequest.open('DELETE', "http://" + HOSTNAME + "/openrooms/" + OPENROOM_ID);
     // httpRequest.setRequestHeader('Authorization', authstrt);
     httpRequest.setRequestHeader("X-CSRFToken", csrftoken);
     httpRequest.setRequestHeader('Content-Type', 'application/json');
@@ -5957,7 +6677,9 @@ function lockRoom(lock) {
     if (lock)
         currentSharedKey = sharedKey;
 
-    APP.xmpp.lockRoom(currentSharedKey, function (res) {
+    APP.xmpp.lockRoom(
+        currentSharedKey,
+        function (res) {
         // password is required
         if (sharedKey)
         {
@@ -6106,6 +6828,10 @@ var Toolbar = (function (my) {
             document.getElementById('jqi_state0_buttonInvite').disabled = false;
         }
     };
+
+    my.makeInroomPayment= function(type_id){
+        makeInroomPayment(type_id);
+    }
 
     /**
      * Disables and enables some of the buttons.
@@ -7929,7 +8655,15 @@ var VideoLayout = (function (my) {
             localVideoContainer.appendChild(localVideo);
             }
         else if (ROLE == "watcher") {
-            var localVideoContainer = document.getElementById('localVideoWrapper');
+            //var localVideoContainer = document.getElementById('localVideoWrapper');
+            //localVideoContainer.appendChild(localVideo);
+
+            //callback = null
+            //App.xmpp.setVideoMute(true, callback);
+            //App.xmpp.setAudioMute(true, callback);
+            
+            //console.log ('Local video')
+        
         }    
 
         // Set default display name.
@@ -12695,7 +13429,7 @@ var defaultOptions = {
     useCookie: false,
     fallbackLng: DEFAULT_LANG,
     load: "unspecific",
-    resGetPath: STATIC_URL +'lang/__ns__-__lng__.json',
+    //resGetPath: STATIC_URL +'lang/__ns__-__lng__.json',
     ns: {
         namespaces: ['main', 'languages'],
         defaultNs: 'main'
@@ -12706,9 +13440,9 @@ var defaultOptions = {
     app: interfaceConfig.APP_NAME,
     getAsync: true,
     customLoad: function(lng, ns, options, done) {
-        var resPath = "lang/__ns__-__lng__.json";
+        var resPath = STATIC_URL + "lang/__ns__-__lng__.json";
         if(lng === languages.EN)
-            resPath = "lang/__ns__.json";
+            resPath = STATIC_URL + "lang/__ns__.json";
         var url = i18n.functions.applyReplacement(resPath, { lng: lng, ns: ns });
         initialized = false;
         i18n.functions.ajax({
@@ -16380,8 +17114,9 @@ module.exports = function(XMPP, eventEmitter) {
             if ($(pres).find('>x[xmlns="http://jabber.org/protocol/muc#user"]>status[code="307"]').length) {
                 $(document).trigger('kicked.muc', [from]);
                 if (this.myroomjid === from) {
+                    reason = pres.lastChild.textContent;
                     XMPP.disposeConference(false);
-                    eventEmitter.emit(XMPPEvents.KICKED);
+                    eventEmitter.emit(XMPPEvents.KICKED, reason);
                 }
             }
             
@@ -16425,15 +17160,13 @@ module.exports = function(XMPP, eventEmitter) {
             } else {
                 console.warn('onPresError ', pres);
                 APP.UI.messageHandler.openReportDialog(null,
-                    'Oops! Something went wrong and we couldn`t connect to the conference.',
+                    "Sorry you can't join the room. Maybe you are banned, or this room is members only. Try again later",
                     pres);
             }
             return true;
         },
-        sendMessage: function (body, nickname, amount, balance) {
-            // try to send a custom value in the message
-            // Andrea Magatti 28-04-2015
-            var msg = $msg({to: this.roomjid, type: 'groupchat', balance: balance, amount: amount});
+        sendMessage: function (body, nickname) {
+            var msg = $msg({to: this.roomjid, type: 'groupchat'});
             msg.c('body', body).up();
             if (nickname) {
                 msg.c('nick', {xmlns: 'http://jabber.org/protocol/nick'}).t(nickname).up().up();
@@ -16442,6 +17175,72 @@ module.exports = function(XMPP, eventEmitter) {
             this.connection.send(msg);
             eventEmitter.emit(XMPPEvents.SENDING_CHAT_MESSAGE, body);
         },
+
+        sendDirectRequest: function(body, from, recipient, kind){
+            var msg = $msg({from: from, to: recipient, type: 'chat', kind: kind});
+            msg.c('body', body).up();
+            this.connection.send(msg);
+        },
+
+        sendHiddenDirectMessage: function(body, from, recipient, kind, action){
+            var msg = $msg({from: from, to: recipient, type: 'chat', kind: kind, action: action});
+            msg.c('body', body).up();
+            this.connection.send(msg);    
+        },
+
+        sendTipMessage: function (body, nickname, amount, balance, notify) {
+            
+            // try to send a custom value in the message
+            // Andrea Magatti 28-04-2015
+            var msg = $msg({to: this.roomjid, type: 'groupchat', balance: balance, amount: amount, notify: notify});
+            msg.c('body', body).up();
+            if (nickname) {
+                msg.c('nick', {xmlns: 'http://jabber.org/protocol/nick'}).t(nickname).up().up();
+            }
+                       
+            this.connection.send(msg);
+            eventEmitter.emit(XMPPEvents.SENDING_CHAT_MESSAGE, body);
+
+        },
+        sendPrivateShowMessage: function (body, nickname, rate, balance_limit, spy_rate) {
+            // values for private show in the message
+            // Andrea Magatti 20-05-2015
+            var msg = $msg({to: this.roomjid, type: 'groupchat', rate: rate, balance_limit: balance_limit, spy_rate: spy_rate});
+            msg.c('body', body).up();
+            if (nickname) {
+                msg.c('nick', {xmlns: 'http://jabber.org/protocol/nick'}).t(nickname).up().up();
+            }
+                       
+            this.connection.send(msg);
+            eventEmitter.emit(XMPPEvents.SENDING_CHAT_MESSAGE, body);
+        },
+        sendTicketShowMessage: function (body, nickname, min_n_users, group_token_per_min, full_ticket_price) {
+            // values for ticket show
+            // Andrea Magatti 20-05-2015
+            var msg = $msg({to: this.roomjid, type: 'groupchat', min_n_users: min_n_users, group_token_per_min: group_token_per_min, full_ticket_price: full_ticket_price});
+            msg.c('body', body).up();
+            if (nickname) {
+                msg.c('nick', {xmlns: 'http://jabber.org/protocol/nick'}).t(nickname).up().up();
+            }
+                       
+            this.connection.send(msg);
+            eventEmitter.emit(XMPPEvents.SENDING_CHAT_MESSAGE, body);
+        },
+        sendTicketShowStarting: function(body, nickname, price){
+            // values to let the user konw how much will costo the ticket
+            // Andrea Magatti 27-05-2015
+            var msg = $msg({to: this.roomjid, type: 'groupchat', price: price});
+            msg.c('body', body).up();
+            if (nickname) {
+                msg.c('nick', {xmlns: 'http://jabber.org/protocol/nick'}).t(nickname).up().up();
+            }
+                       
+            this.connection.send(msg);
+            eventEmitter.emit(XMPPEvents.SENDING_CHAT_MESSAGE, body);
+        },
+
+
+
         setSubject: function (subject) {
             var msg = $msg({to: this.roomjid, type: 'groupchat'});
             msg.c('subject', subject);
@@ -16458,11 +17257,17 @@ module.exports = function(XMPP, eventEmitter) {
 
             var txt = $(msg).find('>body').text();
             var type = msg.getAttribute("type");
+            var kind = msg.getAttribute('kind');
+            var action = msg.getAttribute('action');
+            var result = msg.getAttribute('result');
+            var price = msg.getAttribute('price');
+
             if (type == "error") {
                 eventEmitter.emit(XMPPEvents.CHAT_ERROR_RECEIVED,
                     $(msg).find('>text').text(), txt);
                 return true;
             }
+
 
             var subject = $(msg).find('>subject');
             if (subject.length) {
@@ -16480,42 +17285,76 @@ module.exports = function(XMPP, eventEmitter) {
                 var amount = msg.getAttribute('amount');
                 var balance = msg.getAttribute('balance');
 
-                var private_token_per_min =msg.getAttribute('private_token_per_min');
-                var private_spy_per_min = msg.getAttribute('private_spy_per_min');
-                var min_balance_private = msg.getAttribute('min_balance_private');
+                var private_token_per_min =msg.getAttribute('rate');
+                var private_spy_per_min = msg.getAttribute('spy_rate');
+                var min_balance_private = msg.getAttribute('balance_limit');
 
-                var min_users_per_group = msg.getAttribute('min_users_per_group');
+                var min_n_users = msg.getAttribute('min_n_users');
                 var group_token_per_min = msg.getAttribute('group_token_per_min');
                 var full_ticket_price = msg.getAttribute('full_ticket_price');
 
+                var notify = msg.getAttribute('notify');
+
                 // event to capture the tipping action sent via message
-                if (balance != "undefined" || amount != "undefined") {
+                if (balance != null || amount != null) {
                     eventEmitter.emit(XMPPEvents.TIP_GIVEN,
                         from, nick, amount, balance);
                     console.log('chat', nick, txt);
-                    eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
-                        from, nick, txt, this.myroomjid);
+                    // dont' need to send chat message in private or spy rooms
+                    if (notify == "true"){
+                        eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
+                            from, nick, txt, this.myroomjid, type);
+                    }
                 }
                 // event to capture the availability of the performer for a private show
-                else if (private_spy_per_min != "undefined" || private_token_per_min != "undefined" || min_balance_private != "undefined"){
+                else if (private_spy_per_min != null || private_token_per_min != null || min_balance_private != null){
                     eventEmitter.emit(XMPPEvents.PRIVATE_AVAILABILITY,
-                        from, private_token_per_min, private_spy_per_min, min_balance_private);
+                        from, nick, private_token_per_min, private_spy_per_min, min_balance_private);
                     console.log('chat', nick, txt);
                     eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
-                        from, nick, txt, this.myroomjid);   
+                        from, nick, txt, this.myroomjid, type);   
                 }
                 // event to capture the availability of the performer for a ticket show
-                else if (min_users_per_group != "undefined" || group_token_per_min != "undefined" || full_ticket_price != "undefined"){
+                else if (min_n_users != null || group_token_per_min != null || full_ticket_price != null){
                     eventEmitter.emit(XMPPEvents.TICKET_AVAILABILITY,
-                        from, min_users_per_group, group_token_per_min, full_ticket_price);
+                        from, nick, min_n_users, group_token_per_min, full_ticket_price);
                     console.log('chat', nick, txt);
                     eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
-                        from, nick, txt, this.myroomjid);   
+                        from, nick, txt, this.myroomjid, type);   
                 }
+                else if (type =='chat' && kind == 'private'){
+                    // this handles direct messages
+                    eventEmitter.emit(XMPPEvents.PRIVATE_SHOW_REQUEST_RECEIVED, from, txt);
+                    console.log('chat', nick, txt);
+                    
+                    eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
+                        from, nick, txt, this.myroomjid, type);
+                }
+                else if (type =='chat' && kind == 'ticket'){
+                    // this handles direct messages
+                    eventEmitter.emit(XMPPEvents.TICKET_SHOW_REQUEST_RECEIVED, from, txt, result);
+                    console.log('chat', nick, txt);
+                    eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
+                        from, nick, txt, this.myroomjid, type);
+                }
+                else if (type =='chat' && kind == 'hidden'){
+                    if (action=="user_choose_video_sharing"){
+                        eventEmitter.emit(XMPPEvents.PRIVATE_SHOW_STARTING, from, txt, action);
+                        console.log('chat', nick, txt);
+                    }
+                    else if (action='user_in spy_mode'){
+                        eventEmitter.emit(XMPPEvents.SPY_SHOW_STARTING, from, txt, action);
+                        console.log('chat', nick, txt);
+                    }    
+                }
+                else if (type='groupchat' && price != null){
+                    eventEmitter.emit(XMPPEvents.TICKET_SHOW_STARTING, from, txt, price);
+                    console.log('chat', nick, txt);
+                } 
                 else {
                     console.log('chat', nick, txt);
                     eventEmitter.emit(XMPPEvents.MESSAGE_RECEIVED,
-                        from, nick, txt, this.myroomjid);
+                        from, nick, txt, this.myroomjid, type);
                 }
             }
             return true;
@@ -16541,11 +17380,70 @@ module.exports = function(XMPP, eventEmitter) {
                     }
                 }, onError);
         },
-        kick: function (jid) {
+        
+        makeRoomMembersOnly: function(onSuccess, onError, onNotSupported){
+            //http://xmpp.org/extensions/xep-0045.html#roomconfig
+            var ob = this;
+            this.connection.sendIQ($iq({to: ob.roomjid, type: 'get'}).c('query', {xmlns: 'http://jabber.org/protocol/muc#owner'}),
+                function (res){
+                    if ($(res).find('>query>x[xmlns="jabber:x:data"]>field[var="muc#roomconfig_membersonly"]').length){
+                        var formsubmit = $iq({to: ob.roomjid, type: 'set'}).c('query', {xmlns: 'http://jabber.org/protocol/muc#owner'});
+                        formsubmit.c('x', {xmlns: 'jabber:x:data', type: 'submit'});
+                        formsubmit.c('field', {'var': 'FORM_TYPE'}).c('value').t('http://jabber.org/protocol/muc#roomconfig').up().up();
+                        formsubmit.c('field', {'var': "muc#roomconfig_membersonly"}).c('value').t(1).up().up();
+                        // Fixes a bug in prosody 0.9.+ https://code.google.com/p/lxmppd/issues/detail?id=373
+                        formsubmit.c('field', {'var': 'muc#roomconfig_whois'}).c('value').t('anyone').up().up();
+                        ob.connection.sendIQ(formsubmit,
+                            onSuccess,
+                            onError);
+                    } else {
+                        onNotSupported();
+                    }
+                }, onError);
+        },
+
+        makeRoomNotMembersOnly: function(onSuccess, onError, onNotSupported){
+            //http://xmpp.org/extensions/xep-0045.html#roomconfig
+            var ob = this;
+            this.connection.sendIQ($iq({to: ob.roomjid, type: 'get'}).c('query', {xmlns: 'http://jabber.org/protocol/muc#owner'}),
+                function (res){
+                    if ($(res).find('>query>x[xmlns="jabber:x:data"]>field[var="muc#roomconfig_membersonly"]').length){
+                        var formsubmit = $iq({to: ob.roomjid, type: 'set'}).c('query', {xmlns: 'http://jabber.org/protocol/muc#owner'});
+                        formsubmit.c('x', {xmlns: 'jabber:x:data', type: 'submit'});
+                        formsubmit.c('field', {'var': 'FORM_TYPE'}).c('value').t('http://jabber.org/protocol/muc#roomconfig').up().up();
+                        formsubmit.c('field', {'var': "muc#roomconfig_membersonly"}).c('value').t(0).up().up();
+                        // Fixes a bug in prosody 0.9.+ https://code.google.com/p/lxmppd/issues/detail?id=373
+                        formsubmit.c('field', {'var': 'muc#roomconfig_whois'}).c('value').t('anyone').up().up();
+                        ob.connection.sendIQ(formsubmit,
+                            onSuccess,
+                            onError);
+                    } else {
+                        onNotSupported();
+                    }
+                }, onError);
+        },
+
+        revokeMembership: function(jid){
+            myjid = PERFORMER_ID + "@" + config.hosts.domain;
+            var revokeMembershipIQ = $iq({to: this.roomjid, type: 'set', id: 'revokeM'})
+                .c('query', {xmlns: 'http://jabber.org/protocol/muc#admin'})
+                .c('item', {jid: myjid, affiliation: 'none'})
+                .c('reason').t('You are not anymore member of this room').up().up().up();
+            this.connection.sendIQ(
+                revokeMembershipIQ,
+                function (result) {
+                    console.log('Revoked membership to jid: ', jid, result);
+                },
+                function (error) {
+                    console.log('Error revoking membership to: ', jid, error);
+                });    
+        },
+
+        kick: function (jid, reason) {
             var kickIQ = $iq({to: this.roomjid, type: 'set'})
                 .c('query', {xmlns: 'http://jabber.org/protocol/muc#admin'})
                 .c('item', {nick: Strophe.getResourceFromJid(jid), role: 'none'})
-                .c('reason').t('You have been kicked.').up().up().up();
+                .c('reason').t(reason).up().up().up();
 
             this.connection.sendIQ(
                 kickIQ,
@@ -16622,6 +17520,7 @@ module.exports = function(XMPP, eventEmitter) {
 
         },
 
+        // destroy jabber room when performer exit the show
         destroyRoom: function () {
              
              var reason_by_role = 'Any participant has been notified. See you soon!'
@@ -16645,6 +17544,57 @@ module.exports = function(XMPP, eventEmitter) {
         onModerationGranted: function (jid) {
 
         },
+
+        // Updates Room Status on django page
+        updateOpenRoom:function(roomName, roomType, callback){
+            var httpRequest = new XMLHttpRequest();
+            
+            var payload = new Object();
+            payload.room = ROOM_ID;
+            payload.roomType  = roomType;
+            var requestBody= JSON.stringify(payload);
+            
+                httpRequest.onreadystatechange = function(){ 
+                   if (httpRequest.readyState === 4 &&
+                           httpRequest.status === 300){
+                   callback.call(JSON.parse(httpRequest.responseText)); 
+                }
+            };
+            
+            var csrftoken = getCookie('csrftoken');
+            
+            httpRequest.open('PUT', "http://" + HOSTNAME + "/openrooms/" + OPENROOM_ID);
+            httpRequest.setRequestHeader("X-CSRFToken", csrftoken);
+            httpRequest.setRequestHeader('Content-Type', 'application/json');
+            httpRequest.send(requestBody);
+        },
+
+        registerShowRequest: function(roomInstance, userId, showType, callback){
+            var httpRequest = new XMLHttpRequest();
+            
+            var payload = new Object();
+            payload.room = roomInstance;
+            payload.user  = userId;
+            payload.requestType = showType;
+            var requestBody= JSON.stringify(payload);
+            
+                httpRequest.onreadystatechange = function(){ 
+                   if (httpRequest.readyState === 4 &&
+                           httpRequest.status === 300){
+                   callback.call(JSON.parse(httpRequest.responseText)); 
+                }
+            };
+            
+            var csrftoken = getCookie('csrftoken');
+            
+            httpRequest.open('POST', "http://" + HOSTNAME + "/showrequests/");
+            httpRequest.setRequestHeader("X-CSRFToken", csrftoken);
+            httpRequest.setRequestHeader('Content-Type', 'application/json');
+            httpRequest.send(requestBody);
+        },
+
+
+
 
         sendPresence: function () {
             var pres = $pres({to: this.presMap['to'] });
@@ -16883,6 +17833,22 @@ module.exports = function(XMPP, eventEmitter) {
         }
     });
 };
+
+function getCookie(name) {
+    var cookieValue = null;
+    if (document.cookie && document.cookie != '') {
+        var cookies = document.cookie.split(';');
+        for (var i = 0; i < cookies.length; i++) {
+            var cookie = jQuery.trim(cookies[i]);
+            // Does this cookie string begin with the name we want?
+            if (cookie.substring(0, name.length + 1) == (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
 
 
 },{"../../service/xmpp/XMPPEvents":87,"./JingleSession":47,"./moderator":52}],55:[function(require,module,exports){
@@ -17297,10 +18263,10 @@ module.exports = function (XMPP) {
             }
             return true;
         },
-        eject: function (jid) {
+        eject: function (jid, reason) {
             // We're not the focus, so can't terminate
             //connection.jingle.terminateRemoteByJid(jid, 'kick');
-            this.connection.emuc.kick(jid);
+            this.connection.emuc.kick(jid, reason);
         },
         // Andrea Magatti 19-03-2015
         ban: function(jid){
@@ -17611,10 +18577,12 @@ function setupEvents() {
                             textStatus + ' (' + errorThrown + ')');
                 }
             });
-        
+            console.log("On SetupEvents the user role is: " + ROLE);
 
             // the performer must destroy the room, and delete the record of OpenRoom (Django)
-            if ( ROLE == "performer") {
+            if ( XMPP.myResource() == PERFORMER) {
+
+                XMPP.makeRoomNotMembersOnly();
                 deleteOpenRoom(ROOM_NAME);
                 //return "****** Please go Back and use the Back button (yellow). This way each user will be notified! ******"
             }
@@ -17635,12 +18603,14 @@ function deleteOpenRoom(roomName, callback){
     
     var csrftoken = getCookie('csrftoken');
     // authstrt = 'Basic ' + btoa("Technical_Staff" + ':' + "MySv3vA17"); 
-    httpRequest.open('DELETE', "http://" + HOSTNAME + "/openrooms/" + roomName, false);
+    httpRequest.open('DELETE', "http://" + HOSTNAME + "/openrooms/" + OPENROOM_ID, false);
     // httpRequest.setRequestHeader('Authorization', authstrt);
     httpRequest.setRequestHeader("X-CSRFToken", csrftoken);
     httpRequest.setRequestHeader('Content-Type', 'application/json');
     httpRequest.send();
 }
+
+
 
 function getCookie(name) {
     var cookieValue = null;
@@ -17923,14 +18893,38 @@ var XMPP = {
         connection.emuc.sendMessage(message, nickname);
     },
 
-    sendTipMessage: function (message, nickname, amount, balance) {
-        connection.emuc.sendMessage(message, nickname, amount, balance);
+    sendTipMessage: function (message, nickname, amount, balance, notify) {
+        connection.emuc.sendTipMessage(message, nickname, amount, balance, notify);
     },
     sendPriShowMessage: function (message, nickname, rate, balance_limit, spy_rate) {
-        connection.emuc.sendMessage(message, nickname, rate, balance_limit, spy_rate);
+        connection.emuc.sendPrivateShowMessage(message, nickname, rate, balance_limit, spy_rate, 'private');
     },
     sendTickShowMessage: function (message, nickname, min_n_users, group_token_per_min, full_ticket_price) {
-        connection.emuc.sendMessage(message, nickname, min_n_users, group_token_per_min, full_ticket_price);
+        connection.emuc.sendTicketShowMessage(message, nickname, min_n_users, group_token_per_min, full_ticket_price, 'ticket');
+    },
+    sendTicketShowStarting: function (message, nickname, price){
+        connection.emuc.sendTicketShowStarting(message, nickname, price);
+    },
+    sendDirectRequest:function (body, from, recipient, kind){
+        connection.emuc.sendDirectRequest(body, from, recipient, kind);
+    },
+    sendHiddenDirectMessage: function(body, from, recipient, kind, action){
+        connection.emuc.sendHiddenDirectMessage(body, from, recipient, kind, action);
+    },
+    makeRoomMembersOnly: function(onSuccess, onError, onNotSupported){
+        connection.emuc.makeRoomMembersOnly(onSuccess, onError, onNotSupported);
+    },
+    makeRoomNotMembersOnly: function(onSuccess, onError, onNotSupported){
+        connection.emuc.makeRoomNotMembersOnly(onSuccess, onError, onNotSupported);
+    },
+    revokeMembership: function(jid){
+        connection.emuc.revokeMembership(jid);
+    },
+    updateOpenRoom: function (roomName, roomType, callback){
+        connection.emuc.updateOpenRoom(roomName, roomType, callback);
+    },
+    registerShowRequest: function(roomInstance, userId, showType, callback){
+        connection.emuc.registerShowRequest(roomInstance, userId, showType, callback);
     },
     setSubject: function (topic) {
         connection.emuc.setSubject(topic);
@@ -17944,8 +18938,8 @@ var XMPP = {
     setMute: function (jid, mute) {
         connection.moderate.setMute(jid, mute);
     },
-    eject: function (jid) {
-        connection.moderate.eject(jid);
+    eject: function (jid, reason) {
+        connection.moderate.eject(jid, reason);
     },
     logout: function (callback) {
         Moderator.logout(callback);
@@ -17976,7 +18970,7 @@ var XMPP = {
     getSessions: function () {
         return connection.jingle.sessions;
     }
-
+ 
 };
 
 module.exports = XMPP;
@@ -26633,7 +27627,12 @@ var XMPPEvents = {
     GRANTED_MODERATION: "xmpp.granted_moderation",
     MUC_DESTROYED: "xmpp.muc_destroyed",
     PRIVATE_AVAILABILITY: "xmpp.private_availability",
-    TICKET_AVAILABILITY: "xmpp.ticket_availability" 
+    TICKET_AVAILABILITY: "xmpp.ticket_availability",
+    PRIVATE_SHOW_REQUEST_RECEIVED: "xmpp.private_show_request_received",
+    TICKET_SHOW_REQUEST_RECEIVED: "xmpp.ticket_show_request_received",
+    PRIVATE_SHOW_STARTING: "xmpp.private_show_Starting",
+    TICKET_SHOW_STARTING: "xmpp.ticket_show_starting",
+    SPY_SHOW_STARTING: "xmpp.spy_show_starting"  
 };
 module.exports = XMPPEvents;
 },{}],88:[function(require,module,exports){

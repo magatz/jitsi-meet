@@ -65,7 +65,7 @@ var buttonHandlers =
     },
     "toolbar_button_room_tip": function (event) {
         event.preventDefault();
-        return give_tip();
+        return makeInroomPayment();
     },
     "toolbar_button_target": function (event) {
         event.preventDefault();
@@ -78,9 +78,9 @@ var buttonHandlers =
         return notify_users_for_privateshow();
     },
     "toolbar_button_ticket_show": function(event) {
-        return notify_users_ticket_show()
+        return notify_users_for_ticket_show()
     },
-    "toolbar_button_reqticket": function(event) {
+    "toolbar_button_reqTicket": function(event) {
         return reqTicket();
 
     },
@@ -90,55 +90,184 @@ var buttonHandlers =
 
 };
 
-function notify_users_for_ticketshow(){
+function notify_users_for_privateshow(){
     // need to get the performer parameters
     var get_url = "/performerprofile/" + PERFORMER_XMPP_ID;
-
+    
     $.getJSON(get_url, function(result){
+        
         var private_token_per_min = result.private_token_per_min;
         var private_spy_per_min = result.private_spy_per_min;
         var min_balance_private = result.min_balance_private;
+
+        var msg1 = "Available for private shows! \n Price per minute is: " + private_spy_per_min.toString() + "\n" ;
+        var msg2 = "Minimum tokens needed are: " + min_balance_private.toString(); 
+        var message = msg1.concat(msg2);
+
+        // I'm sending my availabiluty for private show with my rate and min balance available
+        APP.xmpp.sendPriShowMessage(
+            message,
+            PERFORMER,
+            private_token_per_min,
+            min_balance_private,
+            private_spy_per_min                   
+        );           
     });
-
-    var msg1 = "Available for private shows! Price per minute is: " + private_spy_per_min.toString() ;
-    var msg2 = " The minimum balance available is: " + min_balance_private.toString(); 
-    var message = msg1.concat(msg2);
-
-    // I'm sending my availabiluty for private show with my rate and min balance available
-    APP.xmpp.sendPriShowMessage(
-        "pippo",
-        private_token_per_min,
-        min_balance_private,
-        private_spy_per_min                   
-    );           
 };
 
-function notify_users_for_ticketshow(){
-// need to get the performer parameters
+
+function notify_users_for_ticket_show(){
+    // need to get the performer parameters
     var get_url = "/performerprofile/" + PERFORMER_XMPP_ID;
+        
     $.getJSON(get_url, function(result){
         var min_users_per_group = result.min_users_per_group;
         var group_token_per_min = result.group_token_per_min;
         var full_ticket_price = result.full_ticket_price;
-       
+        
+        var msg1 = "I'm available for ticket shows! \n Price for any users is: " + (full_ticket_price / parseInt(min_users_per_group)) + "\n";
+        var msg2 = "The minimum number of users is: " + min_users_per_group; 
+        var message = msg1.concat(msg2);
+        
+        // I'm sending my availabiluty for ticket show with my rate and min balance available
+        APP.xmpp.sendTickShowMessage(
+            message,
+            PERFORMER, 
+            min_users_per_group,
+            group_token_per_min,
+            full_ticket_price
+        );   
     });
-
-    // I'm sending my availabiluty for ticket show with my rate and min balance available
-    APP.xmpp.sendPriShowMessage(
-        "I'm available for ticket shows! Price for any users " + (full_ticket_price / parseInt(min_users_per_group)) +" The Minimum users number is " + min_users_per_group ,
-        min_users_per_group,
-        group_token_per_min,
-        full_ticket_price
-    );           
 };
 
 
 function reqPrivate(){
+    // send a direct message to performer,requesting a private show, providing my balance
+    var get_url_user = "/userdetails/" + userAccountId;
+    var get_url_performer = "/performerprofile/" + PERFORMER_XMPP_ID;
+    $.getJSON(get_url_user, function(u_result){
+        $.getJSON(get_url_performer, function(p_result){
+            if (parseFloat(u_result.balance) < parseFloat(p_result.min_balance_private)){
+                messageHandler.openTwoButtonDialog(
+                    "Buy more tokens!",
+                    "The performer is available for a private show. But you don't have enough tokens!",
+                    true,
+                    'Buy tokens',
+                    function (event){
+                        //function on Buy tokens button
+                        url = " ../../../account/buy/";
+                        window.open(url,'_target');
+                    },
+                    function (event){
+                        //function on loaded
+                        return false;
+                    },
+                    function (event){
+                        //function on closed 
+                        return false;
+                    }
 
-};
+                    );
+
+            }
+            else {
+                messageHandler.openTwoButtonDialog(
+                    "Ready to go",
+                    "Press 'Notify performer' button, to request a private show. The performer will soon answer",
+                    true,
+                    'Notify performer',
+                    function (event){
+                        //function on Notify performer button
+                        //need to get the performer jid
+                        body = USER + " wants a private show. Please respond with the buttons below";
+                        from = APP.xmpp.myJid();
+                        recipient = APP.xmpp.findJidFromResource(PERFORMER);
+                        kind = "private";
+                        APP.xmpp.sendDirectRequest(body, from, recipient,kind);
+                    },
+                    function (event){
+                        //function on loaded
+                        return false;
+                    },
+                    function (event){
+                        //function on closed 
+                        return false;
+                    }
+
+                    );
+
+            }
+        });
+    });
+};    
 
 
 function reqTicket(){
+    // send a direct message to performer,requesting a private show, providing my balance
+    var get_url_user = "/userdetails/" + userAccountId;
+    var get_url_performer = "/performerprofile/" + PERFORMER_XMPP_ID;
+    $.getJSON(get_url_user, function(u_result){
+        $.getJSON(get_url_performer, function(p_result){
+            if (parseFloat(u_result.balance) < parseFloat(p_result.full_ticket_price) / parseFloat(p_result.min_users_per_group)){
+                
+                // message to performer
+                messageHandler.openTwoButtonDialog(
+                    "Buy more tokens!",
+                    "The performer is available for a ticket show. But you don't have enough tokens!",
+                    true,
+                    'Buy tokens',
+                    function (event){
+                        //function on Buy tokens button
+                        url = " ../../../account/buy/";
+                        window.open(url,'_target');
+                    },
+                    function (event){
+                        //function on loaded
+                        return false;
+                    },
+                    function (event){
+                        //function on closed 
+                        return false;
+                    }
+
+                    );
+
+            }
+            else {
+                //PUT of showrequest to the django REST service
+                roomInstance = ROOM_INSTANCE;
+                userId = USER_ID ;
+                showType = 'TIK'
+                
+                APP.xmpp.registerShowRequest(roomInstance, userId, showType);
+              
+                messageHandler.openTwoButtonDialog(
+                    "Ready to go",
+                    "Press 'Notify performer' button, to request a ticket show. The performer will soon answer",
+                    true,
+                    'Notify performer',
+                    function (event){
+                        //function on Notify performer button
+                        //need to get the performer jid
+                        body = USER + " wants a Ticket (group) show. Please respond with the buttons below";
+                        from = APP.xmpp.myJid();
+                        recipient = APP.xmpp.findJidFromResource(PERFORMER);
+                        kind = "ticket";
+                        
+                        APP.xmpp.sendDirectRequest(body, from, recipient, kind);
+                    },
+                    function (event){
+                        //function on loaded
+                        return false;
+                    },
+                    function (event){
+                        //function on closed 
+                        return false;
+                    }
+                );
+            }
+        });
+    });
 
 }; 
 
@@ -523,22 +652,49 @@ function createModal(){
 
 
 
-function give_tip() {
+function makeInroomPayment(type_id) {
 
     var model_object = $('.object_item').attr('id');
-    var user
+    if (type_id){
+        model_object = type_id;
+    }
     // get the id (pk) of the object to buy
     if (model_object == 'toolbar_button_room_tip') {
         var item_id = ROOM_ID;
         var item_price = $('.buy_field').val();
         var performer_id = PERFORMER_ID;
         var get_url = "/userdetails/" + userAccountId;
+        
     }
+    else if(model_object == "private_show"){
+        var item_id = ROOM_ID;
+        var item_price = PRIVATE_RATE;
+        var performer_id = PERFORMER_ID;
+        var get_url = "/userdetails/" + userAccountId;
+        
+    }
+    else if(model_object == "ticket_show"){
+        var item_id = ROOM_ID;
+        var item_price = TICKET_PRICE;
+        var performer_id = PERFORMER_ID;
+        var get_url = "/userdetails/" + userAccountId;
+      
+
+    }
+        else if(model_object == "spy_show"){
+        var item_id = ROOM_ID;
+        var item_price = SPY_RATE;
+        var performer_id = PERFORMER_ID;
+        var get_url = "/userdetails/" + userAccountId;
+        
+    }
+
     else {
         var item_id = $(this).attr('id');
-        var item_price = $(this).attr('price');
+        var item_price = $('.buy_field').val();
         var performer_id = 0;
         var get_url = "/userdetails/" + userAccountId;
+        
     }
 
     console.log("userAccountId: " + get_url);
@@ -552,8 +708,29 @@ function give_tip() {
             
         if (parseFloat(result.balance) < parseFloat(item_price)){
             console.log('Balance is: ' + result.balance);
-            custom_alert("Want to buy more tokens?", "Not enough funds!");
-        }   
+            
+               messageHandler.openTwoButtonDialog(
+                    "Not enough funds!",
+                    "Want to buy more tokens?",
+                    true,
+                    'OK',
+                    function (event){
+                        //function on OK
+                        url = " ../../../account/buy/";
+                        window.open(url,'_target');
+                    },
+                    function (event){
+                        //function on loaded
+                        return false;
+                    },
+                    function (event){
+                        //function on closed 
+                       window.location.replace('../../../hot') 
+                    });
+
+                    
+                }
+               
         
         else if (parseFloat(result.balance) >= parseFloat(item_price)) {
             console.log('Balance is: ' + result.balance);
@@ -576,6 +753,15 @@ function post_to_view(item_id, model_object, item_price, performer_id, balance){
         redirect_url = '../../../buy/gallery/ok/'+ item_id; 
     }
     else if (model_object == 'toolbar_button_room_tip') {
+        redirect_url = "." ;
+    }
+    else if (model_object == 'private_show') {
+        redirect_url = "." ;
+    }
+    else if (model_object == 'ticket_show') {
+        redirect_url = "." ;
+    }
+    else if (model_object == 'spy_show') {
         redirect_url = "." ;
     }
 
@@ -612,8 +798,8 @@ function post_to_view(item_id, model_object, item_price, performer_id, balance){
             success: function(json) {console.log('Server Response: ' + json.server_response);},
             error : function(xhr,errmsg,err) {console.log(xhr.status + ": " + xhr.responseText);}, 
             complete: function (json) {
-                if (model_object != 'toolbar_button_room_tip'){    
-                    window.location.href = redirect_url ;
+                if (model_object == 'videoOpenfire' ||  model_object == 'GalleryOpenfire'){    
+                    window.location.href = redirect_url;
                 }
                 else {
                     var new_balance = parseFloat(balance) - parseFloat(item_price);
@@ -640,14 +826,24 @@ function post_to_view(item_id, model_object, item_price, performer_id, balance){
                             success: function(json) {console.log('Server Response: ' + json.server_response);},
                             error : function(xhr,errmsg,err) {console.log(xhr.status + ": " + xhr.responseText);},
                             complete: function(json) {
+                                if (model_object == "spy_show" || model_object == "private_show"){
+                                     var notify = false;
+                                     console.log ("notify = " + notify);
+                                }
+                                else {
+                                    var notify = true;
+                                    console.log ("notify = " + notify);
+                                }
                                 // I'm sending the Tip notification to the chat after updating the room instance credits!                    
                                 APP.xmpp.sendTipMessage(
                                     "I have tipped  (" + item_price + ") tokens, enjoy ;)",
                                     USER,
                                     item_price,
-                                    new_balance                                
+                                    new_balance,
+                                    notify                                
                                     
-                                );              
+                                );
+                                                  
                             }
 
                         });    
@@ -706,6 +902,7 @@ function hangup() {
         { "Confirm?": true },
         function(event, value, message, formVals)
         {
+            APP.xmpp.makeRoomNotMembersOnly();
             APP.xmpp.destroyRoom();
         });
     return false; 
@@ -723,7 +920,7 @@ function deleteOpenRoom(roomName, callback){
     
     var csrftoken = getCookie('csrftoken');
     // authstrt = 'Basic ' + btoa("Technical_Staff" + ':' + "MySv3vA17"); 
-    httpRequest.open('DELETE', "http://" + HOSTNAME + "/openrooms/" + roomName);
+    httpRequest.open('DELETE', "http://" + HOSTNAME + "/openrooms/" + OPENROOM_ID);
     // httpRequest.setRequestHeader('Authorization', authstrt);
     httpRequest.setRequestHeader("X-CSRFToken", csrftoken);
     httpRequest.setRequestHeader('Content-Type', 'application/json');
@@ -784,7 +981,9 @@ function lockRoom(lock) {
     if (lock)
         currentSharedKey = sharedKey;
 
-    APP.xmpp.lockRoom(currentSharedKey, function (res) {
+    APP.xmpp.lockRoom(
+        currentSharedKey,
+        function (res) {
         // password is required
         if (sharedKey)
         {
@@ -933,6 +1132,10 @@ var Toolbar = (function (my) {
             document.getElementById('jqi_state0_buttonInvite').disabled = false;
         }
     };
+
+    my.makeInroomPayment= function(type_id){
+        makeInroomPayment(type_id);
+    }
 
     /**
      * Disables and enables some of the buttons.

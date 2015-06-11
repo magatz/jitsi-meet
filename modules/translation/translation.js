@@ -15,7 +15,7 @@ var defaultOptions = {
     useCookie: false,
     fallbackLng: DEFAULT_LANG,
     load: "unspecific",
-    resGetPath: STATIC_URL +'lang/__ns__-__lng__.json',
+    //resGetPath: STATIC_URL +'lang/__ns__-__lng__.json',
     ns: {
         namespaces: ['main', 'languages'],
         defaultNs: 'main'
@@ -26,9 +26,9 @@ var defaultOptions = {
     app: interfaceConfig.APP_NAME,
     getAsync: true,
     customLoad: function(lng, ns, options, done) {
-        var resPath = "lang/__ns__-__lng__.json";
+        var resPath = STATIC_URL + "lang/__ns__-__lng__.json";
         if(lng === languages.EN)
-            resPath = "lang/__ns__.json";
+            resPath = STATIC_URL + "lang/__ns__.json";
         var url = i18n.functions.applyReplacement(resPath, { lng: lng, ns: ns });
         initialized = false;
         i18n.functions.ajax({

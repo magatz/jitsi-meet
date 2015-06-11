@@ -189,9 +189,10 @@ function createModalMod(peerJid, peerRole){
             ejectBtn.className = "btn btn-warning";
             ejectBtn.id = "ejectBtnItem";
             ejectBtn.innerText = "Kick-Off";
+            var reason = "You have been kicked-off the meeting,for your bad behaviour";
             ejectBtn.onclick = function(){
                 var this_jid = $('#user_jid').val();
-                APP.xmpp.eject(this_jid);
+                APP.xmpp.eject(this_jid, reason);
                 //popupmenuElement.setAttribute('style', 'display:none;');
             };
             modalButtons.appendChild(ejectBtn);

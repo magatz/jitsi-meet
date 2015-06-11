@@ -228,18 +228,24 @@ var Chat = (function (my) {
     /**
      * Appends the given message to the chat conversation.
      */
-    my.updateChatConversation = function (from, displayName, message) {
+    my.updateChatConversation = function (from, displayName, message, room, type) {
         var divClassName = '';
         var performerFullName = ROOM_NAME + "@" + config.hosts.muc + "/" + PERFORMER;
         // if message is coming from the Performer, mark it in red
-        if (from == performerFullName) {
-            divClassName = "performeruser";   
+        if (type == 'chat'){
+            displayName = "Private message from " + displayName;
+            divClassName = "directMessage";
+            
         }
-        // else leave message blank
         else {
-            divClassName = "watcheruser";
+            if (from == performerFullName ) {
+                divClassName = "performeruser";   
+            }
+            // else leave message blank
+            else {
+                divClassName = "watcheruser";    
+            }
         }
-
         if (!Chat.isVisible()) {
                 unreadMessages++;
                 UIUtil.playSoundNotification('chatNotification');

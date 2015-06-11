@@ -153,10 +153,12 @@ function setupEvents() {
                             textStatus + ' (' + errorThrown + ')');
                 }
             });
-        
+            console.log("On SetupEvents the user role is: " + ROLE);
 
             // the performer must destroy the room, and delete the record of OpenRoom (Django)
-            if ( ROLE == "performer") {
+            if ( XMPP.myResource() == PERFORMER) {
+
+                XMPP.makeRoomNotMembersOnly();
                 deleteOpenRoom(ROOM_NAME);
                 //return "****** Please go Back and use the Back button (yellow). This way each user will be notified! ******"
             }
@@ -177,12 +179,14 @@ function deleteOpenRoom(roomName, callback){
     
     var csrftoken = getCookie('csrftoken');
     // authstrt = 'Basic ' + btoa("Technical_Staff" + ':' + "MySv3vA17"); 
-    httpRequest.open('DELETE', "http://" + HOSTNAME + "/openrooms/" + roomName, false);
+    httpRequest.open('DELETE', "http://" + HOSTNAME + "/openrooms/" + OPENROOM_ID, false);
     // httpRequest.setRequestHeader('Authorization', authstrt);
     httpRequest.setRequestHeader("X-CSRFToken", csrftoken);
     httpRequest.setRequestHeader('Content-Type', 'application/json');
     httpRequest.send();
 }
+
+
 
 function getCookie(name) {
     var cookieValue = null;
@@ -465,14 +469,38 @@ var XMPP = {
         connection.emuc.sendMessage(message, nickname);
     },
 
-    sendTipMessage: function (message, nickname, amount, balance) {
-        connection.emuc.sendMessage(message, nickname, amount, balance);
+    sendTipMessage: function (message, nickname, amount, balance, notify) {
+        connection.emuc.sendTipMessage(message, nickname, amount, balance, notify);
     },
     sendPriShowMessage: function (message, nickname, rate, balance_limit, spy_rate) {
-        connection.emuc.sendMessage(message, nickname, rate, balance_limit, spy_rate);
+        connection.emuc.sendPrivateShowMessage(message, nickname, rate, balance_limit, spy_rate, 'private');
     },
     sendTickShowMessage: function (message, nickname, min_n_users, group_token_per_min, full_ticket_price) {
-        connection.emuc.sendMessage(message, nickname, min_n_users, group_token_per_min, full_ticket_price);
+        connection.emuc.sendTicketShowMessage(message, nickname, min_n_users, group_token_per_min, full_ticket_price, 'ticket');
+    },
+    sendTicketShowStarting: function (message, nickname, price){
+        connection.emuc.sendTicketShowStarting(message, nickname, price);
+    },
+    sendDirectRequest:function (body, from, recipient, kind){
+        connection.emuc.sendDirectRequest(body, from, recipient, kind);
+    },
+    sendHiddenDirectMessage: function(body, from, recipient, kind, action){
+        connection.emuc.sendHiddenDirectMessage(body, from, recipient, kind, action);
+    },
+    makeRoomMembersOnly: function(onSuccess, onError, onNotSupported){
+        connection.emuc.makeRoomMembersOnly(onSuccess, onError, onNotSupported);
+    },
+    makeRoomNotMembersOnly: function(onSuccess, onError, onNotSupported){
+        connection.emuc.makeRoomNotMembersOnly(onSuccess, onError, onNotSupported);
+    },
+    revokeMembership: function(jid){
+        connection.emuc.revokeMembership(jid);
+    },
+    updateOpenRoom: function (roomName, roomType, callback){
+        connection.emuc.updateOpenRoom(roomName, roomType, callback);
+    },
+    registerShowRequest: function(roomInstance, userId, showType, callback){
+        connection.emuc.registerShowRequest(roomInstance, userId, showType, callback);
     },
     setSubject: function (topic) {
         connection.emuc.setSubject(topic);
@@ -486,8 +514,8 @@ var XMPP = {
     setMute: function (jid, mute) {
         connection.moderate.setMute(jid, mute);
     },
-    eject: function (jid) {
-        connection.moderate.eject(jid);
+    eject: function (jid, reason) {
+        connection.moderate.eject(jid, reason);
     },
     logout: function (callback) {
         Moderator.logout(callback);
@@ -518,7 +546,7 @@ var XMPP = {
     getSessions: function () {
         return connection.jingle.sessions;
     }
-
+ 
 };
 
 module.exports = XMPP;

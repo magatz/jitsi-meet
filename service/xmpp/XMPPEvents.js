@@ -27,6 +27,11 @@ var XMPPEvents = {
     GRANTED_MODERATION: "xmpp.granted_moderation",
     MUC_DESTROYED: "xmpp.muc_destroyed",
     PRIVATE_AVAILABILITY: "xmpp.private_availability",
-    TICKET_AVAILABILITY: "xmpp.ticket_availability" 
+    TICKET_AVAILABILITY: "xmpp.ticket_availability",
+    PRIVATE_SHOW_REQUEST_RECEIVED: "xmpp.private_show_request_received",
+    TICKET_SHOW_REQUEST_RECEIVED: "xmpp.ticket_show_request_received",
+    PRIVATE_SHOW_STARTING: "xmpp.private_show_Starting",
+    TICKET_SHOW_STARTING: "xmpp.ticket_show_starting",
+    SPY_SHOW_STARTING: "xmpp.spy_show_starting"  
 };
 module.exports = XMPPEvents;
