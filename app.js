@@ -17,6 +17,7 @@ var APP =
         this.Toolbar = require ("./modules/UI/toolbars/Toolbar");
         this.EventEmitter = require("events");
         this.XMPPEvents = require("./service/xmpp/XMPPEvents");
+        this.settings = require("./modules/settings/Settings");
 
     }
 };

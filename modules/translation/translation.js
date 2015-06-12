@@ -1,5 +1,6 @@
 var i18n = require("i18next-client");
 var languages = require("../../service/translation/languages");
+var Settings = require("../settings/Settings");
 var DEFAULT_LANG = languages.EN;
 var initialized = false;
 var waitingForInit = [];
@@ -23,8 +24,11 @@ var defaultOptions = {
     lngWhitelist : languages.getLanguages(),
     fallbackOnNull: true,
     useDataAttrOptions: true,
+    defaultValueFromContent: false,
     app: interfaceConfig.APP_NAME,
-    getAsync: true,
+    getAsync: false,
+    defaultValueFromContent: false,
+
     customLoad: function(lng, ns, options, done) {
         var resPath = STATIC_URL + "lang/__ns__-__lng__.json";
         if(lng === languages.EN)
@@ -64,39 +68,37 @@ var defaultOptions = {
 
 function initCompleted(t)
 {
-    initialized = true;
     $("[data-i18n]").i18n();
-    for(var i = 0; i < waitingForInit.length; i++)
-    {
-        var obj = waitingForInit[i];
-        obj.callback(i18n.t(obj.key));
+}
+
+function checkForParameter() {
+    var query = window.location.search.substring(1);
+    var vars = query.split("&");
+    for (var i=0;i<vars.length;i++) {
+        var pair = vars[i].split("=");
+        if(pair[0] == "lang")
+        {
+            return pair[1];
+        }
     }
-    waitingForInit = [];
+    return null;
 }
 
 module.exports = {
     init: function (lang) {
-        initialized = false;
         var options = defaultOptions;
-        if(lang)
-            options.lng = lang;
+
+        var lang = navigator.language || navigator.userLanguage;
+        language = lang;
+        window.localStorage.language = lang;
+        options.lng = lang;
+        
         i18n.init(options, initCompleted);
     },
-    translateString: function (key, cb, defaultValue) {
-        if(!cb)
-            return i18n.t(key, defaultValue);
-
-        if(initialized)
-        {
-            cb(i18n.t(key, defaultValue));
-        }
-        else
-        {
-            waitingForInit.push({"callback": cb, "key": key});
-        }
+    translateString: function (key, options) {
+        return i18n.t(key, options);
     },
     setLanguage: function (lang) {
-        initialized = false;
         if(!lang)
             lang = DEFAULT_LANG;
         i18n.setLng(lang, defaultOptions, initCompleted);
@@ -106,5 +108,18 @@ module.exports = {
     },
     translateElement: function (selector) {
         selector.i18n();
+    },
+    generateTranslatonHTML: function (key, options) {
+        var str = "<span data-i18n=\"" + key + "\"";
+        if(options)
+        {
+            str += " data-i18n-options=\"" + JSON.stringify(options) + "\"";
+        }
+        str += ">";
+        str += this.translateString(key, options);
+        str += "</span>";
+        return str;
+
     }
 };
+
