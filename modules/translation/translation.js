@@ -2,8 +2,6 @@ var i18n = require("i18next-client");
 var languages = require("../../service/translation/languages");
 var Settings = require("../settings/Settings");
 var DEFAULT_LANG = languages.EN;
-var initialized = false;
-var waitingForInit = [];
 
 i18n.addPostProcessor("resolveAppName", function(value, key, options) {
     return value.replace("__app__", interfaceConfig.APP_NAME);
@@ -16,25 +14,24 @@ var defaultOptions = {
     useCookie: false,
     fallbackLng: DEFAULT_LANG,
     load: "unspecific",
-    //resGetPath: STATIC_URL +'lang/__ns__-__lng__.json',
+    resGetPath: 'lang/__ns__-__lng__.json',
     ns: {
         namespaces: ['main', 'languages'],
         defaultNs: 'main'
     },
     lngWhitelist : languages.getLanguages(),
     fallbackOnNull: true,
+    fallbackOnEmpty: true,
     useDataAttrOptions: true,
     defaultValueFromContent: false,
     app: interfaceConfig.APP_NAME,
     getAsync: false,
     defaultValueFromContent: false,
-
     customLoad: function(lng, ns, options, done) {
-        var resPath = STATIC_URL + "lang/__ns__-__lng__.json";
+        var resPath = "lang/__ns__-__lng__.json";
         if(lng === languages.EN)
-            resPath = STATIC_URL + "lang/__ns__.json";
+            resPath = "lang/__ns__.json";
         var url = i18n.functions.applyReplacement(resPath, { lng: lng, ns: ns });
-        initialized = false;
         i18n.functions.ajax({
             url: url,
             success: function(data, status, xhr) {
@@ -88,11 +85,27 @@ module.exports = {
     init: function (lang) {
         var options = defaultOptions;
 
-        var lang = navigator.language || navigator.userLanguage;
-        language = lang;
-        window.localStorage.language = lang;
-        options.lng = lang;
-        
+
+        if(!lang)
+        {
+            lang = checkForParameter();
+            if(!lang)
+            {
+                var settings = Settings.getSettings();
+                if(settings)
+                    lang = settings.language;
+
+                if(!lang && config.defaultLanguage)
+                {
+                    lang = config.defaultLanguage;
+                }
+            }
+        }
+
+        if(lang) {
+            options.lng = lang;
+        }
+
         i18n.init(options, initCompleted);
     },
     translateString: function (key, options) {
@@ -122,4 +135,3 @@ module.exports = {
 
     }
 };
-

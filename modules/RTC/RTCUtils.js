@@ -130,12 +130,22 @@ function RTCUtils(RTCService)
     if (navigator.mozGetUserMedia) {
         console.log('This appears to be Firefox');
         var version = parseInt(navigator.userAgent.match(/Firefox\/([0-9]+)\./)[1], 10);
-        if (version >= 22) {
+        if (version >= 40
+            && config.useBundle && config.useRtcpMux) {
             this.peerconnection = mozRTCPeerConnection;
             this.browser = RTCBrowserType.RTC_BROWSER_FIREFOX;
             this.getUserMedia = navigator.mozGetUserMedia.bind(navigator);
             this.pc_constraints = {};
             this.attachMediaStream =  function (element, stream) {
+                //  srcObject is being standardized and FF will eventually
+                //  support that unprefixed. FF also supports the
+                //  "element.src = URL.createObjectURL(...)" combo, but that
+                //  will be deprecated in favour of srcObject.
+                //
+                // https://groups.google.com/forum/#!topic/mozilla.dev.media/pKOiioXonJg
+                // https://github.com/webrtc/samples/issues/302
+                if(!element[0])
+                    return;
                 element[0].mozSrcObject = stream;
                 element[0].play();
             };
@@ -148,14 +158,21 @@ function RTCUtils(RTCService)
                 return tracks[0].id.replace(/[\{,\}]/g,"");
             };
             this.getVideoSrc = function (element) {
+                if(!element)
+                    return null;
                 return element.mozSrcObject;
             };
             this.setVideoSrc = function (element, src) {
-                element.mozSrcObject = src;
+                if(element)
+                    element.mozSrcObject = src;
             };
             RTCSessionDescription = mozRTCSessionDescription;
             RTCIceCandidate = mozRTCIceCandidate;
+        } else {
+            window.location.href = 'unsupported_browser.html';
+            return;
         }
+
     } else if (navigator.webkitGetUserMedia) {
         console.log('This appears to be Chrome');
         this.peerconnection = webkitRTCPeerConnection;
@@ -170,45 +187,37 @@ function RTCUtils(RTCService)
             return stream.id.replace(/[\{,\}]/g,"");
         };
         this.getVideoSrc = function (element) {
+            if(!element)
+                return null;
             return element.getAttribute("src");
         };
         this.setVideoSrc = function (element, src) {
-            element.setAttribute("src", src);
+            if(element)
+                element.setAttribute("src", src);
         };
         // DTLS should now be enabled by default but..
         this.pc_constraints = {'optional': [{'DtlsSrtpKeyAgreement': 'true'}]};
         if (navigator.userAgent.indexOf('Android') != -1) {
             this.pc_constraints = {}; // disable DTLS on Android
         }
-        if (ROLE == "performer"){
-
-            if (!webkitMediaStream.prototype.getVideoTracks) {
-                webkitMediaStream.prototype.getVideoTracks = function () {
-                    return this.videoTracks;
-                };
-            }
-        
-            if (!webkitMediaStream.prototype.getAudioTracks) {
-                webkitMediaStream.prototype.getAudioTracks = function () {
-                    return this.audioTracks;
-                };
-            }
-        }    
+        if (!webkitMediaStream.prototype.getVideoTracks) {
+            webkitMediaStream.prototype.getVideoTracks = function () {
+                return this.videoTracks;
+            };
+        }
+        if (!webkitMediaStream.prototype.getAudioTracks) {
+            webkitMediaStream.prototype.getAudioTracks = function () {
+                return this.audioTracks;
+            };
+        }
     }
     else
     {
         try { console.log('Browser does not appear to be WebRTC-capable'); } catch (e) { }
 
-        window.location.href = '../../../chrome_only/';
+        window.location.href = 'unsupported_browser.html';
         return;
     }
-
-    if (this.browser !== RTCBrowserType.RTC_BROWSER_CHROME &&
-        config.enableFirefoxSupport !== true) {
-        window.location.href = '../../../chrome_only/';
-        return;
-    }
-
 }
 
 
@@ -225,41 +234,23 @@ RTCUtils.prototype.getUserMediaWithConstraints = function(
 
     var isFF = navigator.userAgent.toLowerCase().indexOf('firefox') > -1;
 
+    var self = this;
+
     try {
-        if (config.enableSimulcast
-            && constraints.video
-            && constraints.video.chromeMediaSource !== 'screen'
-            && constraints.video.chromeMediaSource !== 'desktop'
-            && !isAndroid
-
-            // We currently do not support FF, as it doesn't have multistream support.
-            && !isFF) {
-            APP.simulcast.getUserMedia(constraints, function (stream) {
-                    console.log('onUserMediaSuccess');
-                    success_callback(stream);
-                },
-                function (error) {
-                    console.warn('Failed to get access to local media. Error ', error);
-                    if (failure_callback) {
-                        failure_callback(error);
-                    }
-                });
-        } else {
-
-            this.getUserMedia(constraints,
-                function (stream) {
-                    console.log('onUserMediaSuccess');
-                    success_callback(stream);
-                },
-                function (error) {
-                    console.warn('Failed to get access to local media. Error ',
-                        error, constraints);
-                    if (failure_callback) {
-                        failure_callback(error);
-                    }
-                });
-
-        }
+        this.getUserMedia(constraints,
+            function (stream) {
+                console.log('onUserMediaSuccess');
+                self.setAvailableDevices(um, true);
+                success_callback(stream);
+            },
+            function (error) {
+                self.setAvailableDevices(um, false);
+                console.warn('Failed to get access to local media. Error ',
+                    error, constraints);
+                if (failure_callback) {
+                    failure_callback(error);
+                }
+            });
     } catch (e) {
         console.error('GUM failed: ', e);
         if(failure_callback) {
@@ -268,29 +259,114 @@ RTCUtils.prototype.getUserMediaWithConstraints = function(
     }
 };
 
+RTCUtils.prototype.setAvailableDevices = function (um, available) {
+    var devices = {};
+    if(um.indexOf("video") != -1)
+    {
+        devices.video = available;
+    }
+    if(um.indexOf("audio") != -1)
+    {
+        devices.audio = available;
+    }
+    this.service.setDeviceAvailability(devices);
+}
+
 /**
  * We ask for audio and video combined stream in order to get permissions and
  * not to ask twice.
  */
-RTCUtils.prototype.obtainAudioAndVideoPermissions = function() {
+RTCUtils.prototype.obtainAudioAndVideoPermissions =
+    function(devices, callback, usageOptions)
+{
     var self = this;
     // Get AV
 
-    this.getUserMediaWithConstraints(
-        ['audio', 'video'],
+    var successCallback = function (stream) {
+        if(callback)
+            callback(stream, usageOptions);
+        else
+            self.successCallback(stream, usageOptions);
+    };
+
+    if(!devices)
+        devices = ['audio', 'video'];
+
+    var newDevices = [];
+
+
+    if(usageOptions)
+        for(var i = 0; i < devices.length; i++)
+        {
+            var device = devices[i];
+            if(usageOptions[device] === true)
+                newDevices.push(device);
+        }
+    else
+        newDevices = devices;
+
+    if(newDevices.length === 0)
+    {
+        successCallback();
+        return;
+    }
+
+    if (navigator.mozGetUserMedia) {
+
+        // With FF we can't split the stream into audio and video because FF
+        // doesn't support media stream constructors. So, we need to get the
+        // audio stream separately from the video stream using two distinct GUM
+        // calls. Not very user friendly :-( but we don't have many other
+        // options neither.
+        //
+        // Note that we pack those 2 streams in a single object and pass it to
+        // the successCallback method.
+
+        self.getUserMediaWithConstraints(
+            ['audio'],
+            function (audioStream) {
+                self.getUserMediaWithConstraints(
+                    ['video'],
+                    function (videoStream) {
+                        return self.successCallback({
+                            audioStream: audioStream,
+                            videoStream: videoStream
+                        });
+                    },
+                    function (error) {
+                        console.error('failed to obtain video stream - stop',
+                            error);
+                        return self.successCallback(null);
+                    },
+                    config.resolution || '360');
+            },
+            function (error) {
+                console.error('failed to obtain audio stream - stop',
+                        error);
+                return self.successCallback(null);
+            }
+        );
+    } else {
+        this.getUserMediaWithConstraints(
+        newDevices,
         function (stream) {
-            self.successCallback(stream);
+            successCallback(stream);
         },
         function (error) {
             self.errorCallback(error);
         },
-        config.resolution || '720');
+        config.resolution || '360');
+    }
+
 }
 
-RTCUtils.prototype.successCallback = function (stream) {
-    console.log('got', stream, stream.getAudioTracks().length,
-        stream.getVideoTracks().length);
-    this.handleLocalStream(stream);
+RTCUtils.prototype.successCallback = function (stream, usageOptions) {
+    // If this is FF, the stream parameter is *not* a MediaStream object, it's
+    // an object with two properties: audioStream, videoStream.
+    if(stream && !navigator.mozGetUserMedia)
+        console.log('got', stream, stream.getAudioTracks().length,
+            stream.getVideoTracks().length);
+    this.handleLocalStream(stream, usageOptions);
 };
 
 RTCUtils.prototype.errorCallback = function (error) {
@@ -319,52 +395,78 @@ RTCUtils.prototype.errorCallback = function (error) {
                 return self.successCallback(stream);
             },
             function (error) {
-                console.error('failed to obtain audio/video stream - stop', error);
-                //APP.UI.messageHandler.showError("Error",
-                //        "Failed to obtain permissions to use the local microphone" +
-                //        "and/or camera.");
-            return self.successCallback(stream);
+                console.error('failed to obtain audio/video stream - stop',
+                    error);
+                return self.successCallback(null);
             }
         );
     }
 
 }
 
-RTCUtils.prototype.handleLocalStream = function(stream)
+RTCUtils.prototype.handleLocalStream = function(stream, usageOptions)
 {
+    // If this is FF, the stream parameter is *not* a MediaStream object, it's
+    // an object with two properties: audioStream, videoStream.
+    var audioStream, videoStream;
     if(window.webkitMediaStream)
     {
-        
-        if (ROLE == "performer") {    
-            var audioStream = new webkitMediaStream();
+        audioStream = new webkitMediaStream();
+        videoStream = new webkitMediaStream();
+        if(stream) {
             var audioTracks = stream.getAudioTracks();
-        }    
-        
-        var videoStream = new webkitMediaStream();
-        var videoTracks = stream.getVideoTracks();
-        
-        if (ROLE == "performer") {
+
             for (var i = 0; i < audioTracks.length; i++) {
                 audioStream.addTrack(audioTracks[i]);
             }
-            this.service.createLocalStream(audioStream, "audio");
-        }
-            
-        for (i = 0; i < videoTracks.length; i++) {
-            videoStream.addTrack(videoTracks[i]);
-        }
 
+            var videoTracks = stream.getVideoTracks();
 
-        this.service.createLocalStream(videoStream, "video");
-        
+            for (i = 0; i < videoTracks.length; i++) {
+                videoStream.addTrack(videoTracks[i]);
+            }
+        }
     }
     else
     {//firefox
-        this.service.createLocalStream(stream, "stream");
+        audioStream = stream.audioStream;
+        videoStream = stream.videoStream;
     }
 
+    var audioMuted = (usageOptions && usageOptions.audio === false),
+        videoMuted = (usageOptions && usageOptions.video === false);
+
+    var audioGUM = (!usageOptions || usageOptions.audio !== false),
+        videoGUM = (!usageOptions || usageOptions.video !== false);
+
+
+    this.service.createLocalStream(audioStream, "audio", null, null,
+        audioMuted, audioGUM);
+
+    this.service.createLocalStream(videoStream, "video", null, null,
+        videoMuted, videoGUM);
 };
 
+RTCUtils.prototype.createStream = function(stream, isVideo)
+{
+    var newStream = null;
+    if(window.webkitMediaStream)
+    {
+        newStream = new webkitMediaStream();
+        if(newStream)
+        {
+            var tracks = (isVideo? stream.getVideoTracks() : stream.getAudioTracks());
 
+            for (i = 0; i < tracks.length; i++) {
+                newStream.addTrack(tracks[i]);
+            }
+        }
+
+    }
+    else
+        newStream = stream;
+
+    return newStream;
+};
 
 module.exports = RTCUtils;

@@ -16,6 +16,9 @@ function showDesktopSharingButton() {
  */
  
 function hideToolbar() {
+    if(config.alwaysVisibleToolbar)
+        return;
+
     var header = $("#header"),
         bottomToolbar = $("#bottomToolbar");
     var isToolbarHover = false;

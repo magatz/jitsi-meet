@@ -151,7 +151,7 @@ function StatsCollector(peerconnection, audioLevelsInterval, statsInterval, even
     /**
      * Gather PeerConnection stats once every this many milliseconds.
      */
-    this.GATHER_INTERVAL = 10000;
+    this.GATHER_INTERVAL = 15000;
 
     /**
      * Log stats via the focus once every this many milliseconds.
@@ -234,7 +234,6 @@ StatsCollector.prototype.start = function ()
 {
     var self = this;
     if(!config.disableAudioLevels) {
-        console.debug("set audio levels interval");
         this.audioLevelsIntervalId = setInterval(
             function () {
                 // Interval updates
@@ -261,8 +260,7 @@ StatsCollector.prototype.start = function ()
         );
     }
 
-    if(!config.disableStats) {
-        console.debug("set stats interval");
+    if(!config.disableStats && !navigator.mozGetUserMedia) {
         this.statsIntervalId = setInterval(
             function () {
                 // Interval updates
@@ -296,7 +294,7 @@ StatsCollector.prototype.start = function ()
         );
     }
 
-    if (config.logStats) {
+    if (config.logStats && !navigator.mozGetUserMedia) {
         this.gatherStatsIntervalId = setInterval(
             function () {
                 self.peerconnection.getStats(
@@ -317,6 +315,38 @@ StatsCollector.prototype.start = function ()
 };
 
 /**
+ * Checks whether a certain record should be included in the logged statistics.
+ */
+function acceptStat(reportId, reportType, statName) {
+    if (reportType == "googCandidatePair" && statName == "googChannelId")
+        return false;
+
+    if (reportType == "ssrc") {
+        if (statName == "googTrackId" ||
+            statName == "transportId" ||
+            statName == "ssrc")
+            return false;
+    }
+
+    return true;
+}
+
+/**
+ * Checks whether a certain record should be included in the logged statistics.
+ */
+function acceptReport(id, type) {
+    if (id.substring(0, 15) == "googCertificate" ||
+        id.substring(0, 9) == "googTrack" ||
+        id.substring(0, 20) == "googLibjingleSession")
+        return false;
+
+    if (type == "googComponent")
+        return false;
+
+    return true;
+}
+
+/**
  * Converts the stats to the format used for logging, and saves the data in
  * this.statsToBeLogged.
  * @param reports Reports as given by webkitRTCPerConnection.getStats.
@@ -326,12 +356,16 @@ StatsCollector.prototype.addStatsToBeLogged = function (reports) {
     var num_records = this.statsToBeLogged.timestamps.length;
     this.statsToBeLogged.timestamps.push(new Date().getTime());
     reports.map(function (report) {
+        if (!acceptReport(report.id, report.type))
+            return;
         var stat = self.statsToBeLogged.stats[report.id];
         if (!stat) {
             stat = self.statsToBeLogged.stats[report.id] = {};
         }
         stat.type = report.type;
         report.names().map(function (name) {
+            if (!acceptStat(report.id, report.type, name))
+                return;
             var values = stat[name];
             if (!values) {
                 values = stat[name] = [];
@@ -662,9 +696,10 @@ StatsCollector.prototype.processAudioLevelReport = function ()
 
         var ssrc = getStatValue(now, 'ssrc');
         var jid = APP.xmpp.getJidFromSSRC(ssrc);
-        if (!jid && (Date.now() - now.timestamp) < 3000)
+        if (!jid)
         {
-            console.warn("No jid for ssrc: " + ssrc);
+            if((Date.now() - now.timestamp) < 3000)
+                console.warn("No jid for ssrc: " + ssrc);
             continue;
         }
 
@@ -693,15 +728,10 @@ StatsCollector.prototype.processAudioLevelReport = function ()
         {
             // TODO: can't find specs about what this value really is,
             // but it seems to vary between 0 and around 32k.
-            audioLevel = formatAudioLevel(audioLevel / 32767);
-            var oldLevel = jidStats.ssrc2AudioLevel[ssrc];
-            if(jid != APP.xmpp.myJid() && (!oldLevel || oldLevel != audioLevel))
-            {
-
-                jidStats.ssrc2AudioLevel[ssrc] = audioLevel;
-
+            audioLevel = audioLevel / 32767;
+            jidStats.setSsrcAudioLevel(ssrc, audioLevel);
+            if(jid != APP.xmpp.myJid())
                 this.eventEmitter.emit("statistics.audioLevel", jid, audioLevel);
-            }
         }
 
     }

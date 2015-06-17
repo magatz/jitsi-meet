@@ -1,4 +1,4 @@
-var Settings = require("../side_pannels/settings/Settings");
+var Settings = require("../../settings/Settings");
 var MediaStreamType = require("../../../service/RTC/MediaStreamTypes");
 
 var users = {};
@@ -20,6 +20,12 @@ function isUserMuted(jid) {
         }
     }
 
+    if(jid && jid == APP.xmpp.myJid())
+    {
+        var localVideo = APP.RTC.localVideo;
+        return (!localVideo || localVideo.isMuted());
+    }
+
     if (!APP.RTC.remoteStreams[jid] || !APP.RTC.remoteStreams[jid][MediaStreamType.VIDEO_TYPE]) {
         return null;
     }
@@ -30,38 +36,10 @@ function getGravatarUrl(id, size) {
     if(id === APP.xmpp.myJid() || !id) {
         id = Settings.getSettings().uid;
     }
-    //calling one service that return the avatar url
-    xmpp_name=id.substring(id.indexOf("/") + 1);
-
-    if (size){
-        the_url = STATIC_URL+"img/avatar.jpg"   
-    }
-    else {
-        the_url = STATIC_URL+"img/avatar-30.jpg"
-    }
-    
-    
-    return the_url;
+    return 'https://www.gravatar.com/avatar/' +
+        MD5.hexdigest(id.trim().toLowerCase()) +
+        "?d=wavatar&size=" + (size || "30");
 }
-
-function get_from_django(xmpp_name){
-    var get_url = document.location.host + "/avatar_url/" + xmpp_name;
-    console.info("Getting " + xmpp_name + " picture from: " + get_url );
-    var xmlhttp = new XMLHttpRequest();
-    
-    xmlhttp.onreadystatechange = function() {
-        if (xmlhttp.readyState == 4){
-            if (xmlhttp.status == 200){
-                var myArr = JSON.parse(xmlhttp.responseText);
-                callback(myArr.user_avatar_url);
-            }
-        }    
-    }
-    xmlhttp.open("GET", get_url, false);
-    xmlhttp.send();
-    return  "http://www.standardgsm.com/data/include/cms/olzdj/Arkusz2/Nokia-7110/4.jpg" ; 
-}
-
 
 var Avatar = {
 
@@ -147,8 +125,9 @@ var Avatar = {
             } else {
                 if (video && video.length > 0) {
                     setVisibility(video, !show);
-                    setVisibility(avatar, show);
                 }
+                setVisibility(avatar, show);
+
             }
         }
     },

@@ -108,6 +108,14 @@ module.exports = function(XMPP, eventEmitter)
             // see http://xmpp.org/extensions/xep-0166.html#concepts-session
             switch (action) {
                 case 'session-initiate':
+                    var startMuted = $(iq).find('jingle>startmuted');
+                    if(startMuted && startMuted.length > 0)
+                    {
+                        var audioMuted = startMuted.attr("audio");
+                        var videoMuted = startMuted.attr("video");
+                        APP.UI.setInitialMuteFromFocus((audioMuted === "true"),
+                            (videoMuted === "true"));
+                    }
                     sess = new JingleSession(
                         $(iq).attr('to'), $(iq).find('jingle').attr('sid'),
                         this.connection, XMPP);
@@ -320,7 +328,7 @@ module.exports = function(XMPP, eventEmitter)
         populateData: function () {
             var data = {};
             Object.keys(this.sessions).forEach(function (sid) {
-                var session = this.sessions[sid];
+                var session = self.sessions[sid];
                 if (session.peerconnection && session.peerconnection.updateLog) {
                     // FIXME: should probably be a .dump call
                     data["jingle_" + session.sid] = {

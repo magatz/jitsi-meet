@@ -1,4 +1,4 @@
-/* global Strophe, updateLargeVideo, focusedVideoSrc*/
+/* global Strophe, focusedVideoSrc*/
 
 // cache datachannels to avoid garbage collection
 // https://code.google.com/p/chromium/issues/detail?id=405545
@@ -36,7 +36,7 @@ var DataChannels =
             // selections so that it can do adaptive simulcast,
             // we want the notification to trigger even if userJid is undefined,
             // or null.
-            var userJid = APP.UI.getLargeVideoState().userJid;
+            var userJid = APP.UI.getLargeVideoState().userResourceJid;
             // we want the notification to trigger even if userJid is undefined,
             // or null.
             onSelectedEndpointChanged(userJid);
@@ -112,24 +112,6 @@ var DataChannels =
                     eventEmitter.emit(RTCEvents.LASTN_ENDPOINT_CHANGED,
                         lastNEndpoints, endpointsEnteringLastN, obj);
                 }
-                else if ("SimulcastLayersChangedEvent" === colibriClass)
-                {
-                    eventEmitter.emit(RTCEvents.SIMULCAST_LAYER_CHANGED,
-                        obj.endpointSimulcastLayers);
-                }
-                else if ("SimulcastLayersChangingEvent" === colibriClass)
-                {
-                    eventEmitter.emit(RTCEvents.SIMULCAST_LAYER_CHANGING,
-                        obj.endpointSimulcastLayers);
-                }
-                else if ("StartSimulcastLayerEvent" === colibriClass)
-                {
-                    eventEmitter.emit(RTCEvents.SIMULCAST_START, obj.simulcastLayer);
-                }
-                else if ("StopSimulcastLayerEvent" === colibriClass)
-                {
-                    eventEmitter.emit(RTCEvents.SIMULCAST_STOP, obj.simulcastLayer);
-                }
                 else
                 {
                     console.debug("Data channel JSON-formatted message: ", obj);
@@ -194,6 +176,8 @@ function onSelectedEndpointChanged(userResource)
         _dataChannels.some(function (dataChannel) {
             if (dataChannel.readyState == 'open')
             {
+                console.log('sending selected endpoint changed ' 
+                    + 'notification to the bridge: ', userResource);
                 dataChannel.send(JSON.stringify({
                     'colibriClass': 'SelectedEndpointChangedEvent',
                     'selectedEndpoint':

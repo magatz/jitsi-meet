@@ -6,6 +6,10 @@ function TraceablePeerConnection(ice_config, constraints) {
     this.stats = {};
     this.statsinterval = null;
     this.maxstats = 0; // limit to 300 values, i.e. 5 minutes; set to 0 to disable
+    var Interop = require('sdp-interop').Interop;
+    this.interop = new Interop();
+    var Simulcast = require('sdp-simulcast');
+    this.simulcast = new Simulcast({numOfLayers: 3, explodeRemoteSimulcast: false});
 
     // override as desired
     this.trace = function (what, info) {
@@ -98,29 +102,46 @@ function TraceablePeerConnection(ice_config, constraints) {
 };
 
 dumpSDP = function(description) {
+    if (typeof description === 'undefined' || description == null) {
+        return '';
+    }
+
     return 'type: ' + description.type + '\r\n' + description.sdp;
-}
+};
 
 if (TraceablePeerConnection.prototype.__defineGetter__ !== undefined) {
     TraceablePeerConnection.prototype.__defineGetter__('signalingState', function() { return this.peerconnection.signalingState; });
     TraceablePeerConnection.prototype.__defineGetter__('iceConnectionState', function() { return this.peerconnection.iceConnectionState; });
     TraceablePeerConnection.prototype.__defineGetter__('localDescription', function() {
-        var publicLocalDescription = APP.simulcast.reverseTransformLocalDescription(this.peerconnection.localDescription);
-        return publicLocalDescription;
+        var desc = this.peerconnection.localDescription;
+        this.trace('getLocalDescription::preTransform', dumpSDP(desc));
+
+        // if we're running on FF, transform to Plan B first.
+        if (navigator.mozGetUserMedia) {
+            desc = this.interop.toPlanB(desc);
+            this.trace('getLocalDescription::postTransform (Plan B)', dumpSDP(desc));
+        }
+        return desc;
     });
     TraceablePeerConnection.prototype.__defineGetter__('remoteDescription', function() {
-        var publicRemoteDescription = APP.simulcast.reverseTransformRemoteDescription(this.peerconnection.remoteDescription);
-        return publicRemoteDescription;
+        var desc = this.peerconnection.remoteDescription;
+        this.trace('getRemoteDescription::preTransform', dumpSDP(desc));
+
+        // if we're running on FF, transform to Plan B first.
+        if (navigator.mozGetUserMedia) {
+            desc = this.interop.toPlanB(desc);
+            this.trace('getRemoteDescription::postTransform (Plan B)', dumpSDP(desc));
+        }
+        return desc;
     });
 }
 
 TraceablePeerConnection.prototype.addStream = function (stream) {
     this.trace('addStream', stream.id);
-    APP.simulcast.resetSender();
     try
     {
-        this.peerconnection.addStream(stream);}
-    
+        this.peerconnection.addStream(stream);
+    }
     catch (e)
     {
         console.error(e);
@@ -130,7 +151,6 @@ TraceablePeerConnection.prototype.addStream = function (stream) {
 
 TraceablePeerConnection.prototype.removeStream = function (stream, stopStreams) {
     this.trace('removeStream', stream.id);
-    APP.simulcast.resetSender();
     if(stopStreams) {
         stream.getAudioTracks().forEach(function (track) {
             track.stop();
@@ -139,7 +159,13 @@ TraceablePeerConnection.prototype.removeStream = function (stream, stopStreams) 
             track.stop();
         });
     }
-    this.peerconnection.removeStream(stream);
+
+    try {
+        // FF doesn't support this yet.
+        this.peerconnection.removeStream(stream);
+    } catch (e) {
+        console.error(e);
+    }
 };
 
 TraceablePeerConnection.prototype.createDataChannel = function (label, opts) {
@@ -148,9 +174,14 @@ TraceablePeerConnection.prototype.createDataChannel = function (label, opts) {
 };
 
 TraceablePeerConnection.prototype.setLocalDescription = function (description, successCallback, failureCallback) {
+    this.trace('setLocalDescription::preTransform', dumpSDP(description));
+    // if we're running on FF, transform to Plan A first.
+    if (navigator.mozGetUserMedia) {
+        description = this.interop.toUnifiedPlan(description);
+        this.trace('setLocalDescription::postTransform (Plan A)', dumpSDP(description));
+    }
+
     var self = this;
-    description = APP.simulcast.transformLocalDescription(description);
-    this.trace('setLocalDescription', dumpSDP(description));
     this.peerconnection.setLocalDescription(description,
         function () {
             self.trace('setLocalDescriptionOnSuccess');
@@ -169,9 +200,17 @@ TraceablePeerConnection.prototype.setLocalDescription = function (description, s
 };
 
 TraceablePeerConnection.prototype.setRemoteDescription = function (description, successCallback, failureCallback) {
+    this.trace('setRemoteDescription::preTransform', dumpSDP(description));
+    // TODO the focus should squeze or explode the remote simulcast
+    description = this.simulcast.mungeRemoteDescription(description);
+    this.trace('setRemoteDescription::postTransform (simulcast)', dumpSDP(description));
+
+    // if we're running on FF, transform to Plan A first.
+    if (navigator.mozGetUserMedia) {
+        description = this.interop.toUnifiedPlan(description);
+        this.trace('setRemoteDescription::postTransform (Plan A)', dumpSDP(description));
+    }
     var self = this;
-    description = APP.simulcast.transformRemoteDescription(description);
-    this.trace('setRemoteDescription', dumpSDP(description));
     this.peerconnection.setRemoteDescription(description,
         function () {
             self.trace('setRemoteDescriptionOnSuccess');
@@ -203,7 +242,19 @@ TraceablePeerConnection.prototype.createOffer = function (successCallback, failu
     this.trace('createOffer', JSON.stringify(constraints, null, ' '));
     this.peerconnection.createOffer(
         function (offer) {
-            self.trace('createOfferOnSuccess', dumpSDP(offer));
+            self.trace('createOfferOnSuccess::preTransform', dumpSDP(offer));
+            // if we're running on FF, transform to Plan B first.
+            // NOTE this is not tested because in meet the focus generates the
+            // offer.
+            if (navigator.mozGetUserMedia) {
+                offer = self.interop.toPlanB(offer);
+                self.trace('createOfferOnSuccess::postTransform (Plan B)', dumpSDP(offer));
+            }
+
+            if (config.enableSimulcast && self.simulcast.isSupported()) {
+                offer = self.simulcast.mungeLocalDescription(offer);
+                self.trace('createOfferOnSuccess::postTransform (simulcast)', dumpSDP(offer));
+            }
             successCallback(offer);
         },
         function(err) {
@@ -219,8 +270,16 @@ TraceablePeerConnection.prototype.createAnswer = function (successCallback, fail
     this.trace('createAnswer', JSON.stringify(constraints, null, ' '));
     this.peerconnection.createAnswer(
         function (answer) {
-            answer = APP.simulcast.transformAnswer(answer);
-            self.trace('createAnswerOnSuccess', dumpSDP(answer));
+            self.trace('createAnswerOnSuccess::preTransfom', dumpSDP(answer));
+            // if we're running on FF, transform to Plan A first.
+            if (navigator.mozGetUserMedia) {
+                answer = self.interop.toPlanB(answer);
+                self.trace('createAnswerOnSuccess::postTransfom (Plan B)', dumpSDP(answer));
+            }
+            if (config.enableSimulcast && self.simulcast.isSupported()) {
+                answer = self.simulcast.mungeLocalDescription(answer);
+                self.trace('createAnswerOnSuccess::postTransfom (simulcast)', dumpSDP(answer));
+            }
             successCallback(answer);
         },
         function(err) {

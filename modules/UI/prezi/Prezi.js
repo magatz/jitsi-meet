@@ -33,10 +33,12 @@ var Prezi = {
     openPreziDialog: function() {
         var myprezi = APP.xmpp.getPrezi();
         if (myprezi) {
-            messageHandler.openTwoButtonDialog("Remove Prezi",
-                "Are you sure you would like to remove your Prezi?",
+            messageHandler.openTwoButtonDialog("dialog.removePreziTitle",
+                null,
+                "dialog.removePreziMsg",
+                null,
                 false,
-                "Remove",
+                "dialog.Remove",
                 function(e,v,m,f) {
                     if(v) {
                         APP.xmpp.removePreziFromPresence();
@@ -45,36 +47,59 @@ var Prezi = {
             );
         }
         else if (preziPlayer != null) {
-            messageHandler.openTwoButtonDialog("Share a Prezi",
-                "Another participant is already sharing a Prezi." +
-                    "This conference allows only one Prezi at a time.",
+            messageHandler.openTwoButtonDialog("dialog.sharePreziTitle",
+                null, "dialog.sharePreziMsg",
+                null,
                 false,
-                "Ok",
+                "dialog.Ok",
                 function(e,v,m,f) {
                     $.prompt.close();
                 }
             );
         }
         else {
+            var html = APP.translation.generateTranslatonHTML(
+                "dialog.sharePreziTitle");
+            var cancelButton = APP.translation.generateTranslatonHTML(
+                "dialog.Cancel");
+            var shareButton = APP.translation.generateTranslatonHTML(
+                "dialog.Share");
+            var backButton = APP.translation.generateTranslatonHTML(
+                "dialog.Back");
+            var buttons = [];
+            var buttons1 = [];
+            // Cancel button to both states
+            buttons.push({title: cancelButton, value: false});
+            buttons1.push({title: cancelButton, value: false});
+            // Share button
+            buttons.push({title: shareButton, value: true});
+            // Back button
+            buttons1.push({title: backButton, value: true});
+            var linkError = APP.translation.generateTranslatonHTML(
+                "dialog.preziLinkError");
+            var defaultUrl = APP.translation.translateString("defaultPreziLink",
+                {url: "http://prezi.com/wz7vhjycl7e6/my-prezi"});
             var openPreziState = {
                 state0: {
-                    html:   '<h2>Share a Prezi</h2>' +
-                            '<input id="preziUrl" type="text" ' +
-                            'placeholder="e.g. ' +
-                            'http://prezi.com/wz7vhjycl7e6/my-prezi" autofocus>',
+                    html:   '<h2>' + html + '</h2>' +
+                            '<input name="preziUrl" type="text" ' +
+                            'data-i18n="[placeholder]defaultPreziLink" data-i18n-options=\'' +
+                            JSON.stringify({"url": "http://prezi.com/wz7vhjycl7e6/my-prezi"}) +
+                            '\' placeholder="' + defaultUrl + '" autofocus>',
                     persistent: false,
-                    buttons: { "Share": true , "Cancel": false},
-                    defaultButton: 1,
-                    submit: function(e,v,m,f){
+                    buttons: buttons,
+                    focus: ':input:first',
+                    defaultButton: 0,
+                    submit: function (e, v, m, f) {
                         e.preventDefault();
                         if(v)
                         {
-                            var preziUrl = document.getElementById('preziUrl');
+                            var preziUrl = f.preziUrl;
 
-                            if (preziUrl.value)
+                            if (preziUrl)
                             {
                                 var urlValue
-                                    = encodeURI(UIUtil.escapeHtml(preziUrl.value));
+                                    = encodeURI(UIUtil.escapeHtml(preziUrl));
 
                                 if (urlValue.indexOf('http://prezi.com/') != 0
                                     && urlValue.indexOf('https://prezi.com/') != 0)
@@ -102,24 +127,22 @@ var Prezi = {
                     }
                 },
                 state1: {
-                    html:   '<h2>Share a Prezi</h2>' +
-                            'Please provide a correct prezi link.',
+                    html:   '<h2>' + html + '</h2>' +
+                            linkError,
                     persistent: false,
-                    buttons: { "Back": true, "Cancel": false },
+                    buttons: buttons1,
+                    focus: ':input:first',
                     defaultButton: 1,
-                    submit:function(e,v,m,f) {
+                    submit: function (e, v, m, f) {
                         e.preventDefault();
-                        if(v==0)
+                        if (v === 0)
                             $.prompt.close();
                         else
                             $.prompt.goToState('state0');
                     }
                 }
             };
-            var focusPreziUrl =  function(e) {
-                    document.getElementById('preziUrl').focus();
-                };
-            messageHandler.openDialogWithStates(openPreziState, focusPreziUrl, focusPreziUrl);
+            messageHandler.openDialogWithStates(openPreziState);
         }
     }
 

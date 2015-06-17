@@ -28,6 +28,15 @@ module.exports = function(XMPP, eventEmitter) {
         initPresenceMap: function (myroomjid) {
             this.presMap['to'] = myroomjid;
             this.presMap['xns'] = 'http://jabber.org/protocol/muc';
+            if(APP.RTC.localAudio.isMuted())
+            {
+                this.addAudioInfoToPresence(true);
+            }
+
+            if(APP.RTC.localVideo.isMuted())
+            {
+                this.addVideoInfoToPresence(true);
+            }
         },
         doJoin: function (jid, password) {
             this.myroomjid = jid;
@@ -143,6 +152,32 @@ module.exports = function(XMPP, eventEmitter) {
                 $(document).trigger('videomuted.muc', [from, videoMuted.text()]);
             }
 
+            var startMuted = $(pres).find('>startmuted');
+            if (startMuted.length)
+            {
+                eventEmitter.emit(XMPPEvents.START_MUTED,
+                    startMuted.attr("audio") === "true", startMuted.attr("video") === "true");
+            }
+
+            var devices = $(pres).find('>devices');
+            if(devices.length)
+            {
+                var audio = devices.find('>audio');
+                var video = devices.find('>video');
+                var devicesValues = {audio: false, video: false};
+                if(audio.length && audio.text() === "true")
+                {
+                    devicesValues.audio = true;
+                }
+
+                if(video.length && video.text() === "true")
+                {
+                    devicesValues.video = true;
+                }
+                eventEmitter.emit(XMPPEvents.DEVICE_AVAILABLE,
+                    Strophe.getResourceFromJid(from), devicesValues);
+            }
+
             var stats = $(pres).find('>stats');
             if (stats.length) {
                 var statsObj = {};
@@ -188,9 +223,9 @@ module.exports = function(XMPP, eventEmitter) {
                     eventEmitter.emit(XMPPEvents.GRANTED_MODERATION, 
                         from, member.jid, member.displayName, member.role, pres, Moderator.isModerator());
 
-                    eventEmitter.emit(XMPPEvents.LOCALROLE_CHANGED,
+                    eventEmitter.emit(XMPPEvents.LOCAL_ROLE_CHANGED,
                         from, member, pres, Moderator.isModerator(),
-                        Moderator.isExternalAuthEnabled());
+                      
                 }
                 if (!this.joined) {
                     this.joined = true;
@@ -207,13 +242,13 @@ module.exports = function(XMPP, eventEmitter) {
                     console.info("Ignore focus: " + from + ", real JID: " + member.jid);
                 }
                 else {
-                    var id = $(pres).find('>userID').text();
+                    var id = $(pres).find('>userId').text();
                     var email = $(pres).find('>email');
                     if (email.length > 0) {
                         id = email.text();
                     }
                     
-                    eventEmitter.emit(XMPPEvents.MUC_ENTER, from, id, member.displayName);
+                    eventEmitter.emit(XMPPEvents.MUC_MEMBER_JOINED, from, id, member.displayName);
                 }
             } else {
                 // Presence update for existing participant
@@ -259,6 +294,21 @@ module.exports = function(XMPP, eventEmitter) {
                 this.list_members.splice(this.list_members.indexOf(from), 1);
                 this.onParticipantLeft(from);
             }
+
+             var self = this;
+            // Remove old ssrcs coming from the jid
+            Object.keys(this.ssrc2jid).forEach(function (ssrc) {
+                if (self.ssrc2jid[ssrc] == from) {
+                    delete self.ssrc2jid[ssrc];
+                }
+            });
+            
+            // Status code 110 indicates that this notification is "self-presence".
+            if (!$(pres).find('>x[xmlns="http://jabber.org/protocol/muc#user"]>status[code="110"]').length) {
+                delete this.members[from];
+                this.list_members.splice(this.list_members.indexOf(from), 1);
+                this.onParticipantLeft(from);
+            }
             // If the status code is 110 this means we're leaving and we would like
             // to remove everyone else from our view, so we trigger the event.
             else if (this.list_members.length > 1) {
@@ -277,7 +327,7 @@ module.exports = function(XMPP, eventEmitter) {
                     eventEmitter.emit(XMPPEvents.KICKED, reason);
                 }
             }
-            
+            // CXC specific to handle banner users
             if ($(pres).find('>x[xmlns="http://jabber.org/protocol/muc#user"]>status[code="301"]').length) {
                 $(document).trigger('banned.muc', [from]);
                 if (this.myroomjid === from) {
@@ -305,20 +355,17 @@ module.exports = function(XMPP, eventEmitter) {
                     // domains or something is wrong.
 //                    XMPP.promptLogin();
                     APP.UI.messageHandler.openReportDialog(null,
-                        'Oops ! We couldn`t join the conference.' +
-                        ' There might be some problem with security' +
-                        ' configuration. Please contact service' +
-                        ' administrator.', pres);
+                        "dialog.joinError", pres);
                 } else {
                     console.warn('onPresError ', pres);
                     APP.UI.messageHandler.openReportDialog(null,
-                        'Oops! Something went wrong and we couldn`t connect to the conference.',
+                        "dialog.connectError",
                         pres);
                 }
             } else {
                 console.warn('onPresError ', pres);
                 APP.UI.messageHandler.openReportDialog(null,
-                    "Sorry you can't join the room. Maybe you are banned, or this room is members only. Try again later",
+                    "dialog.connectError",
                     pres);
             }
             return true;
@@ -755,6 +802,10 @@ module.exports = function(XMPP, eventEmitter) {
 
 
         sendPresence: function () {
+             if (!this.presMap['to']) {
+                // Too early to send presence - not initialized
+                return;
+            }
             var pres = $pres({to: this.presMap['to'] });
             pres.c('x', {xmlns: this.presMap['xns']});
 
@@ -791,6 +842,11 @@ module.exports = function(XMPP, eventEmitter) {
                     .t(this.presMap['displayName']).up();
             }
 
+            if(this.presMap["devices"])
+            {
+                pres.c('devices').c('audio').t(this.presMap['devices'].audio).up()
+                    .c('video').t(this.presMap['devices'].video).up().up();
+            }
             if (this.presMap['audions']) {
                 pres.c('audiomuted', {xmlns: this.presMap['audions']})
                     .t(this.presMap['audiomuted']).up();
@@ -838,6 +894,14 @@ module.exports = function(XMPP, eventEmitter) {
                                     || 'sendrecv' }
                         ).up();
                     }
+                pres.up();
+            }
+        if(this.presMap["startMuted"] !== undefined)
+            {
+                pres.c("startmuted", {audio: this.presMap["startMuted"].audio,
+                    video: this.presMap["startMuted"].video,
+                    xmlns: "http://jitsi.org/jitmeet/start-muted"});
+                delete this.presMap["startMuted"];
             }
 
             pres.up();
@@ -853,6 +917,9 @@ module.exports = function(XMPP, eventEmitter) {
             this.presMap['source' + sourceNumber + '_type'] = mtype;
             this.presMap['source' + sourceNumber + '_ssrc'] = ssrcs;
             this.presMap['source' + sourceNumber + '_direction'] = direction;
+        },
+        addDevicesToPresence: function (devices) {
+            this.presMap['devices'] = devices;
         },
         clearPresenceMedia: function () {
             var self = this;
@@ -915,6 +982,9 @@ module.exports = function(XMPP, eventEmitter) {
         addUserIdToPresence: function (userId) {
             this.presMap['userId'] = userId;
         },
+        addStartMutedToPresence: function (audio, video) {
+            this.presMap["startMuted"] = {audio: audio, video: video};
+        },
         isModerator: function () {
             return this.role === 'moderator';
         },
@@ -926,7 +996,7 @@ module.exports = function(XMPP, eventEmitter) {
         },
         onParticipantLeft: function (jid) {
 
-            eventEmitter.emit(XMPPEvents.MUC_LEFT, jid);
+            eventEmitter.emit(XMPPEvents.MUC_MEMBER_LEFT, jid);
 
             this.connection.jingle.terminateByJid(jid);
 
@@ -935,7 +1005,7 @@ module.exports = function(XMPP, eventEmitter) {
                     [jid, this.getPrezi(jid)]);
             }
 
-            Moderator.onMucLeft(jid);
+            Moderator.onMucMemberLeft(jid);
         },
         parsePresence: function (from, memeber, pres) {
             if($(pres).find(">bridgeIsDown").length > 0 && !bridgeIsDown) {
@@ -970,7 +1040,7 @@ module.exports = function(XMPP, eventEmitter) {
 
             });
 
-            eventEmitter.emit(XMPPEvents.CHANGED_STREAMS, from, changedStreams);
+            eventEmitter.emit(XMPPEvents.STREAMS_CHANGED, from, changedStreams);
 
             var displayName = !config.displayJids
                 ? memeber.displayName : Strophe.getResourceFromJid(from);

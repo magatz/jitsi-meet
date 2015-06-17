@@ -1,4 +1,4 @@
-/* global $, jQuery */
+/* global $, APP, jQuery, toastr */
 var messageHandler = (function(my) {
 
     /**
@@ -7,10 +7,16 @@ var messageHandler = (function(my) {
      * @param titleString the title of the message
      * @param messageString the text of the message
      */
-    my.openMessageDialog = function(titleString, messageString) {
-        $.prompt(messageString,
+    my.openMessageDialog = function(titleKey, messageKey) {
+        var title = null;
+        if(titleKey)
+        {
+            title = APP.translation.generateTranslatonHTML(titleKey);
+        }
+        var message = APP.translation.generateTranslatonHTML(messageKey);
+        $.prompt(message,
             {
-                title: titleString,
+                title: title,
                 persistent: false
             }
         );
@@ -26,17 +32,38 @@ var messageHandler = (function(my) {
      * @param submitFunction function to be called on submit
      * @param loadedFunction function to be called after the prompt is fully loaded
      * @param closeFunction function to be called after the prompt is closed
+     * @param focus optional focus selector or button index to be focused after
+     *        the dialog is opened
+     * @param defaultButton index of default button which will be activated when
+     *        the user press 'enter'. Indexed from 0.
      */
-    my.openTwoButtonDialog = function(titleString, msgString, persistent, leftButton,
-                                      submitFunction, loadedFunction, closeFunction) {
-        var buttons = {};
-        buttons[leftButton] = true;
-        buttons.Cancel = false;
-        $.prompt(msgString, {
-            title: titleString,
+    my.openTwoButtonDialog = function(titleKey, titleString, msgKey, msgString,
+        persistent, leftButtonKey, submitFunction, loadedFunction,
+        closeFunction, focus, defaultButton)
+    {
+        var buttons = [];
+
+        var leftButton = APP.translation.generateTranslatonHTML(leftButtonKey);
+        buttons.push({ title: leftButton, value: true});
+
+        var cancelButton
+            = APP.translation.generateTranslatonHTML("dialog.Cancel");
+        buttons.push({title: cancelButton, value: false});
+
+        var message = msgString, title = titleString;
+        if (titleKey)
+        {
+            title = APP.translation.generateTranslatonHTML(titleKey);
+        }
+        if (msgKey) {
+            message = APP.translation.generateTranslatonHTML(msgKey);
+        }
+        $.prompt(message, {
+            title: title,
             persistent: false,
             buttons: buttons,
-            defaultButton: 1,
+            defaultButton: defaultButton,
+            focus: focus,
             loaded: loadedFunction,
             submit: submitFunction,
             close: closeFunction
@@ -54,7 +81,7 @@ var messageHandler = (function(my) {
      * @param submitFunction function to be called on submit
      * @param loadedFunction function to be called after the prompt is fully loaded
      */
-    my.openDialog = function (titleString,    msgString, persistent, buttons,
+    my.openDialog = function (titleString, msgString, persistent, buttons,
                               submitFunction, loadedFunction) {
         var args = {
             title: titleString,
@@ -67,7 +94,7 @@ var messageHandler = (function(my) {
         if (persistent) {
             args.closeText = '';
         }
-        return $.prompt(msgString, args); 
+        return new Impromptu(msgString, args);
     };
 
     /**
@@ -81,16 +108,10 @@ var messageHandler = (function(my) {
      * Shows a dialog with different states to the user.
      *
      * @param statesObject object containing all the states of the dialog
-     * @param loadedFunction function to be called after the prompt is fully loaded
-     * @param stateChangedFunction function to be called when the state of the dialog is changed
      */
-    my.openDialogWithStates = function(statesObject, loadedFunction, stateChangedFunction) {
+    my.openDialogWithStates = function (statesObject, options) {
 
-
-        var myPrompt = $.prompt(statesObject);
-
-        myPrompt.on('impromptu:loaded', loadedFunction);
-        myPrompt.on('impromptu:statechanged', stateChangedFunction);
+        return new Impromptu(statesObject, options);
     };
 
     /**
@@ -130,8 +151,8 @@ var messageHandler = (function(my) {
      * @param msgString the text of the message
      * @param error the error that is being reported
      */
-    my.openReportDialog = function(titleString, msgString, error) {
-        my.openMessageDialog(titleString, msgString);
+    my.openReportDialog = function(titleKey, msgKey, error) {
+        my.openMessageDialog(titleKey, msgKey);
         console.log(error);
         //FIXME send the error to the server
     };
@@ -141,16 +162,20 @@ var messageHandler = (function(my) {
      * @param title the title of the message
      * @param message the text of the messafe
      */
-    my.showError = function(title, message) {
-        if(!(title || message)) {
-            title = title || "Oops!";
-            message = message || "There was some kind of error";
+    my.showError = function(titleKey, msgKey) {
+
+        if(!titleKey) {
+            titleKey = "dialog.oops";
         }
-        messageHandler.openMessageDialog(title, message);
+        if(!msgKey)
+        {
+            msgKey = "dialog.defaultError";
+        }
+        messageHandler.openMessageDialog(titleKey, msgKey);
     };
 
-    my.notify = function(displayName, displayNameKey, displayNameDefault,
-                         cls, messageKey, messageDefault, messageArguments) {
+    my.notify = function(displayName, displayNameKey,
+                         cls, messageKey, messageArguments, options) {
         var displayNameSpan = '<span class="nickname" ';
         if(displayName)
         {
@@ -159,27 +184,23 @@ var messageHandler = (function(my) {
         else
         {
             displayNameSpan += "data-i18n='" + displayNameKey +
-                "'>" + APP.translation.translateString(displayNameKey, null,
-                {defaultValue: displayNameDefault});
+                "'>" + APP.translation.translateString(displayNameKey);
         }
         displayNameSpan += "</span>";
-        var lMessageArguments = messageArguments;
-        if(!messageArguments)
-            lMessageArguments = {};
-        lMessageArguments.defaultValue = messageDefault;
         toastr.info(
             displayNameSpan + '<br>' +
             '<span class=' + cls + ' data-i18n="' + messageKey + '"' +
                 (messageArguments?
-                    " i18n-options='" + JSON.stringify(messageArguments) + "'"
+                    " data-i18n-options='" + JSON.stringify(messageArguments) + "'"
                     : "") + ">" +
-            APP.translation.translateString(messageKey, null,
-                lMessageArguments) +
-            '</span>');
+            APP.translation.translateString(messageKey,
+                messageArguments) +
+            '</span>', null, options);
     };
 
     return my;
 }(messageHandler || {}));
+
 module.exports = messageHandler;
 
 

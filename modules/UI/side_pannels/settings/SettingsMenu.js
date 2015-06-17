@@ -1,5 +1,5 @@
 var Avatar = require("../../avatar/Avatar");
-var Settings = require("./Settings");
+var Settings = require("./../../../settings/Settings");
 var UIUtil = require("../../util/UIUtil");
 var languages = require("../../../../service/translation/languages");
 
@@ -26,16 +26,42 @@ function generateLanguagesSelectBox()
 var SettingsMenu = {
 
     init: function () {
-        $("#updateSettings").before(generateLanguagesSelectBox());
+        $("#startMutedOptions").before(generateLanguagesSelectBox());
+        APP.translation.translateElement($("#languages_selectbox"));
         $('#settingsmenu>input').keyup(function(event){
             if(event.keyCode === 13) {//enter
                 SettingsMenu.update();
             }
         });
 
+        if(APP.xmpp.isModerator())
+        {
+            $("#startMutedOptions").css("display", "block");
+        }
+        else
+        {
+            $("#startMutedOptions").css("display", "none");
+        }
+
         $("#updateSettings").click(function () {
             SettingsMenu.update();
         });
+    },
+
+    onRoleChanged: function () {
+        if(APP.xmpp.isModerator())
+        {
+            $("#startMutedOptions").css("display", "block");
+        }
+        else
+        {
+            $("#startMutedOptions").css("display", "none");
+        }
+    },
+
+    setStartMuted: function (audio, video) {
+        $("#startAudioMuted").attr("checked", audio);
+        $("#startVideoMuted").attr("checked", video);
     },
 
     update: function() {
@@ -47,11 +73,17 @@ var SettingsMenu = {
             APP.xmpp.addToPresence("displayName", displayName, true);
         }
 
-        APP.translation.setLanguage($("#languages_selectbox").val());
+        var language = $("#languages_selectbox").val();
+        APP.translation.setLanguage(language);
+        Settings.setLanguage(language);
 
         APP.xmpp.addToPresence("email", newEmail);
         var email = Settings.setEmail(newEmail);
 
+        var startAudioMuted = ($("#startAudioMuted").is(":checked"));
+        var startVideoMuted = ($("#startVideoMuted").is(":checked"));
+        APP.xmpp.addToPresence("startMuted",
+            [startAudioMuted, startVideoMuted]);
 
         Avatar.setUserAvatar(APP.xmpp.myJid(), email);
     },

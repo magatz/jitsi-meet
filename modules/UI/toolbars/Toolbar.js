@@ -7,7 +7,8 @@ var Etherpad = require("../etherpad/Etherpad");
 var PanelToggler = require("../side_pannels/SidePanelToggler");
 var Authentication = require("../authentication/Authentication");
 var UIUtil = require("../util/UIUtil");
-
+var AuthenticationEvents
+    = require("../../../service/authentication/AuthenticationEvents");
 
 var roomUrl = null;
 var sharedKey = '';
@@ -21,9 +22,9 @@ var buttonHandlers =
     "toolbar_button_camera": function () {
         return APP.UI.toggleVideo();
     },
-    "toolbar_button_authentication": function () {
+    /*"toolbar_button_authentication": function () {
         return Toolbar.authenticateClicked();
-    },
+    },*/
     "toolbar_button_record": function () {
         return toggleRecording();
     },
@@ -34,7 +35,6 @@ var buttonHandlers =
         return Toolbar.openLinkDialog();
     },
     "toolbar_button_chat": function () {
-
         return BottomToolbar.toggleChat();
     },
     "toolbar_button_prezi": function () {
@@ -54,11 +54,17 @@ var buttonHandlers =
     "toolbar_button_sip": function () {
         return callSipButtonClicked();
     },
+    "toolbar_button_dialpad": function () {
+        return dialpadButtonClicked();
+    },
     "toolbar_button_settings": function () {
         PanelToggler.toggleSettingsMenu();
     },
     "toolbar_button_hangup": function () {
         return hangup();
+    },
+    "toolbar_button_login": function () {
+        Toolbar.authenticateClicked();
     },
     "toolbar_button_contact_list": function () {
         Toolbar.toggleContactList();
@@ -885,7 +891,7 @@ function custom_alert(output_msg, title_msg){
 }
 
 function hangup() {
-    
+    APP.xmpp.disposeConference();
     if(config.enableWelcomePage)
     {
         setTimeout(function()
@@ -895,11 +901,20 @@ function hangup() {
         }, 10000);
 
     }
+    var title = APP.translation.generateTranslatonHTML(
+        "dialog.sessTerminated");
+    var msg = APP.translation.generateTranslatonHTML(
+        "dialog.hungUp");
+    var button = APP.translation.generateTranslatonHTML(
+        "dialog.joinAgain");
+    var buttons = [];
+    buttons.push({title: button, value: true});
+
     UI.messageHandler.openDialog(
-        "Session Terminated",
-        "You have closed the room",
+        title,
+        msg,
         true,
-        { "Confirm?": true },
+        buttons,
         function(event, value, message, formVals)
         {
             APP.xmpp.makeRoomNotMembersOnly();
@@ -949,31 +964,33 @@ function getCookie(name) {
 
 function toggleRecording() {
     APP.xmpp.toggleRecording(function (callback) {
-        APP.UI.messageHandler.openTwoButtonDialog(null,
-                '<h3>Enter recording token</h3>' +
-                '<input id="recordingToken" type="text" ' +
-                'placeholder="token" autofocus>',
+        var msg = APP.translation.generateTranslatonHTML(
+            "dialog.recordingToken");
+        var token = APP.translation.translateString("dialog.token");
+        APP.UI.messageHandler.openTwoButtonDialog(null, null, null,
+                '<h2>' + msg + '</h2>' +
+                '<input name="recordingToken" type="text" ' +
+                ' data-i18n="[placeholder]dialog.token" ' +
+                'placeholder="' + token + '" autofocus>',
             false,
-            "Save",
+            "dialog.Save",
             function (e, v, m, f) {
                 if (v) {
-                    var token = document.getElementById('recordingToken');
+                    var token = f.recordingToken;
 
-                    if (token.value) {
-                        callback(UIUtil.escapeHtml(token.value));
+                    if (token) {
+                        callback(UIUtil.escapeHtml(token));
                     }
                 }
             },
-            function (event) {
-                document.getElementById('recordingToken').focus();
-            },
-            function () {
-            }
+            null,
+            function () { },
+            ':input:first'
         );
     }, Toolbar.setRecordingButtonState, Toolbar.setRecordingButtonState);
 }
 
-/**
+**
  * Locks / unlocks the room.
  */
 function lockRoom(lock) {
@@ -981,9 +998,7 @@ function lockRoom(lock) {
     if (lock)
         currentSharedKey = sharedKey;
 
-    APP.xmpp.lockRoom(
-        currentSharedKey,
-        function (res) {
+    APP.xmpp.lockRoom(currentSharedKey, function (res) {
         // password is required
         if (sharedKey)
         {
@@ -997,14 +1012,13 @@ function lockRoom(lock) {
         }
     }, function (err) {
         console.warn('setting password failed', err);
-        messageHandler.showError('Lock failed',
-            'Failed to lock conference.',
-            err);
+        messageHandler.showError("dialog.lockTitle",
+            "dialog.lockMessage");
         Toolbar.setSharedKey('');
     }, function () {
         console.warn('room passwords not supported');
-        messageHandler.showError('Warning',
-            'Room passwords are currently not supported.');
+        messageHandler.showError("dialog.warning",
+            "dialog.passwordNotSupported");
         Toolbar.setSharedKey('');
     });
 };
@@ -1019,25 +1033,20 @@ function inviteParticipants() {
     var sharedKeyText = "";
     if (sharedKey && sharedKey.length > 0) {
         sharedKeyText =
-            "This conference is password protected. Please use the " +
-            "following pin when joining:%0D%0A%0D%0A" +
-            sharedKey + "%0D%0A%0D%0A";
+            APP.translation.translateString("email.sharedKey",
+                {sharedKey: sharedKey});
+        sharedKeyText = sharedKeyText.replace(/\n/g, "%0D%0A");
     }
 
+    var supportedBrowsers = "Chromium, Google Chrome " +
+        APP.translation.translateString("email.and") + " Opera";
     var conferenceName = roomUrl.substring(roomUrl.lastIndexOf('/') + 1);
-    var subject = "Invitation to a " + interfaceConfig.APP_NAME + " (" + conferenceName + ")";
-    var body = "Hey there, I%37d like to invite you to a " + interfaceConfig.APP_NAME +
-        " conference I%37ve just set up.%0D%0A%0D%0A" +
-        "Please click on the following link in order" +
-        " to join the conference.%0D%0A%0D%0A" +
-        roomUrl +
-        "%0D%0A%0D%0A" +
-        sharedKeyText +
-        "Note that " + interfaceConfig.APP_NAME + " is currently" +
-        " only supported by Chromium," +
-        " Google Chrome and Opera, so you need" +
-        " to be using one of these browsers.%0D%0A%0D%0A" +
-        "Talk to you in a sec!";
+    var subject = APP.translation.translateString("email.subject",
+        {appName:interfaceConfig.APP_NAME, conferenceName: conferenceName});
+    var body = APP.translation.translateString("email.body",
+        {appName:interfaceConfig.APP_NAME, sharedKeyText: sharedKeyText,
+            roomUrl: roomUrl, supportedBrowsers: supportedBrowsers});
+    body = body.replace(/\n/g, "%0D%0A");
 
     if (window.localStorage.displayname) {
         body += "%0D%0A%0D%0A" + window.localStorage.displayname;
@@ -1050,29 +1059,34 @@ function inviteParticipants() {
     window.open("mailto:?subject=" + subject + "&body=" + body, '_blank');
 }
 
+function dialpadButtonClicked()
+{
+    //TODO show the dialpad window
+}
+
 function callSipButtonClicked()
 {
     var defaultNumber
         = config.defaultSipNumber ? config.defaultSipNumber : '';
 
-    messageHandler.openTwoButtonDialog(null,
-        '<h3>Enter SIP number</h3>' +
-        '<input id="sipNumber" type="text"' +
+    var sipMsg = APP.translation.generateTranslatonHTML(
+        "dialog.sipMsg");
+    messageHandler.openTwoButtonDialog(null, null, null,
+        '<h2>' + sipMsg + '</h2>' +
+        '<input name="sipNumber" type="text"' +
         ' value="' + defaultNumber + '" autofocus>',
         false,
-        "Dial",
+        "dialog.Dial",
         function (e, v, m, f) {
             if (v) {
-                var numberInput = document.getElementById('sipNumber');
-                if (numberInput.value) {
-                    APP.xmpp.dial(numberInput.value, 'fromnumber',
-                        UI.getRoomName(), sharedKey);
+                var numberInput = f.sipNumber;
+                if (numberInput) {
+                    APP.xmpp.dial(
+                        numberInput, 'fromnumber', UI.getRoomName(), sharedKey);
                 }
             }
         },
-        function (event) {
-            document.getElementById('sipNumber').focus();
-        }
+        null, null, ':input:first'
     );
 }
 
@@ -1082,14 +1096,27 @@ var Toolbar = (function (my) {
         for(var k in buttonHandlers)
             $("#" + k).click(buttonHandlers[k]);
         UI = ui;
-        
-        /*// magatz: after large video is displayed we hide the filmstrip
-        if (ROLE = "performer"){
-            console.info("Updated large video")
-            var filmstrip = $("#remoteVideos");
-            filmstrip.toggleClass("hidden");
-        }*/
-    }
+        // Update login info
+        APP.xmpp.addListener(
+            AuthenticationEvents.IDENTITY_UPDATED,
+            function (authenticationEnabled, userIdentity) {
+
+                var loggedIn = false;
+                if (userIdentity) {
+                    loggedIn = true;
+                }
+
+                Toolbar.showAuthenticateButton(authenticationEnabled);
+
+                if (authenticationEnabled) {
+                    Toolbar.setAuthenticatedIdentity(userIdentity);
+
+                    Toolbar.showLoginButton(!loggedIn);
+                    Toolbar.showLogoutButton(loggedIn);
+                }
+            }
+        );
+    },
 
     /**
      * Sets shared key
@@ -1101,21 +1128,33 @@ var Toolbar = (function (my) {
 
     my.authenticateClicked = function () {
         Authentication.focusAuthenticationWindow();
+        if (!APP.xmpp.isExternalAuthEnabled()) {
+            Authentication.xmppAuthenticate();
+            return;
+        }
         // Get authentication URL
-        APP.xmpp.getAuthUrl(APP.UI.getRoomName(), function (url) {
-            // Open popup with authentication URL
-            var authenticationWindow = Authentication.createAuthenticationWindow(function () {
-                // On popup closed - retry room allocation
-                APP.xmpp.allocateConferenceFocus(APP.UI.getRoomName(), APP.UI.checkForNicknameAndJoin);
-            }, url);
-            if (!authenticationWindow) {
-                Toolbar.showAuthenticateButton(true);
-                messageHandler.openMessageDialog(
-                    null, "Your browser is blocking popup windows from this site." +
-                        " Please enable popups in your browser security settings" +
-                        " and try again.");
-            }
-        });
+        if (!APP.xmpp.getMUCJoined()) {
+            APP.xmpp.getLoginUrl(UI.getRoomName(), function (url) {
+                // If conference has not been started yet - redirect to login page
+                window.location.href = url;
+            });
+        } else {
+            APP.xmpp.getPopupLoginUrl(UI.getRoomName(), function (url) {
+                // Otherwise - open popup with authentication URL
+                var authenticationWindow = Authentication.createAuthenticationWindow(
+                    function () {
+                        // On popup closed - retry room allocation
+                        APP.xmpp.allocateConferenceFocus(
+                            APP.UI.getRoomName(),
+                            function () { console.info("AUTH DONE"); }
+                        );
+                    }, url);
+                if (!authenticationWindow) {
+                    messageHandler.openMessageDialog(
+                        null, "dialog.popupError");
+                }
+            });
+        }
     };
 
     /**
@@ -1129,8 +1168,8 @@ var Toolbar = (function (my) {
         if (inviteLink) {
             inviteLink.value = roomUrl;
             inviteLink.select();
-            document.getElementById('jqi_state0_buttonInvite').disabled = false;
-        }
+            $('#inviteLinkRef').parent()
+                .find('button[value=true]').prop('disabled', false);
     };
 
     my.makeInroomPayment= function(type_id){
@@ -1155,25 +1194,17 @@ var Toolbar = (function (my) {
         if (!APP.xmpp.isModerator()) {
             if (sharedKey) {
                 messageHandler.openMessageDialog(null,
-                        "This conversation is currently protected by" +
-                        " a password. Only the owner of the conference" +
-                        " could set a password.",
-                    false,
-                    "Password");
+                    "dialog.passwordError");
             } else {
-                messageHandler.openMessageDialog(null,
-                    "This conversation isn't currently protected by" +
-                        " a password. Only the owner of the conference" +
-                        " could set a password.",
-                    false,
-                    "Password");
+                messageHandler.openMessageDialog(null, "dialog.passwordError2");
             }
         } else {
             if (sharedKey) {
-                messageHandler.openTwoButtonDialog(null,
-                    "Are you sure you would like to remove your password?",
+                messageHandler.openTwoButtonDialog(null, null,
+                    "dialog.passwordCheck",
+                    null,
                     false,
-                    "Remove",
+                    "dialog.Remove",
                     function (e, v) {
                         if (v) {
                             Toolbar.setSharedKey('');
@@ -1181,25 +1212,29 @@ var Toolbar = (function (my) {
                         }
                     });
             } else {
-                messageHandler.openTwoButtonDialog(null,
-                    '<h3>Set a password to lock your room</h3>' +
-                        '<input id="lockKey" type="text"' +
-                        'placeholder="your password" autofocus>',
+                var msg = APP.translation.generateTranslatonHTML(
+                    "dialog.passwordMsg");
+                var yourPassword = APP.translation.translateString(
+                    "dialog.yourPassword");
+                messageHandler.openTwoButtonDialog(null, null, null,
+                    '<h2>' + msg + '</h2>' +
+                        '<input name="lockKey" type="text"' +
+                        ' data-i18n="[placeholder]dialog.yourPassword" ' +
+                        'placeholder="' + yourPassword + '" autofocus>',
                     false,
-                    "Save",
-                    function (e, v) {
+                    "dialog.Save",
+                    function (e, v, m, f) {
                         if (v) {
-                            var lockKey = document.getElementById('lockKey');
+                            var lockKey = f.lockKey;
 
-                            if (lockKey.value) {
-                                Toolbar.setSharedKey(UIUtil.escapeHtml(lockKey.value));
+                            if (lockKey) {
+                                Toolbar.setSharedKey(
+                                    UIUtil.escapeHtml(lockKey));
                                 lockRoom(true);
                             }
                         }
                     },
-                    function () {
-                        document.getElementById('lockKey').focus();
-                    }
+                    null, null, 'input:first'
                 );
             }
         }
@@ -1209,18 +1244,20 @@ var Toolbar = (function (my) {
      * Opens the invite link dialog.
      */
     my.openLinkDialog = function () {
-        var inviteLink;
+        var inviteAttreibutes;
+
         if (roomUrl === null) {
-            inviteLink = "Your conference is currently being created...";
+            inviteAttreibutes = 'data-i18n="[value]roomUrlDefaultMsg" value="' +
+            APP.translation.translateString("roomUrlDefaultMsg") + '"';
         } else {
-            inviteLink = encodeURI(roomUrl);
+            inviteAttreibutes = "value=\"" + encodeURI(roomUrl) + "\"";
         }
-        messageHandler.openTwoButtonDialog(
-            "Share this link with everyone you want to invite",
-            '<input id="inviteLinkRef" type="text" value="' +
-                inviteLink + '" onclick="this.select();" readonly>',
+        messageHandler.openTwoButtonDialog("dialog.shareLink",
+            null, null,
+            '<input id="inviteLinkRef" type="text" ' +
+                inviteAttreibutes + ' onclick="this.select();" readonly>',
             false,
-            "Invite",
+            "dialog.Invite",
             function (e, v) {
                 if (v) {
                     if (roomUrl) {
@@ -1228,12 +1265,13 @@ var Toolbar = (function (my) {
                     }
                 }
             },
-            function () {
+            function (event) {
                 if (roomUrl) {
                     document.getElementById('inviteLinkRef').select();
                 } else {
-                    document.getElementById('jqi_state0_buttonInvite')
-                        .disabled = true;
+                    if (event && event.target)
+                        $(event.target)
+                            .find('button[value=true]').prop('disabled', true);
                 }
             }
         );
@@ -1243,18 +1281,28 @@ var Toolbar = (function (my) {
      * Opens the settings dialog.
      */
     my.openSettingsDialog = function () {
-        messageHandler.openTwoButtonDialog(
-            '<h3>Configure your conference</h3>' +
+        var settings1 = APP.translation.generateTranslatonHTML(
+            "dialog.settings1");
+        var settings2 = APP.translation.generateTranslatonHTML(
+            "dialog.settings2");
+        var settings3 = APP.translation.generateTranslatonHTML(
+            "dialog.settings3");
+
+        var yourPassword = APP.translation.translateString(
+            "dialog.yourPassword");
+
+        messageHandler.openTwoButtonDialog(null,
+            '<h2>' + settings1 + '</h2>' +
                 '<input type="checkbox" id="initMuted">' +
-                'Participants join muted<br/>' +
+                settings2 + '<br/>' +
                 '<input type="checkbox" id="requireNicknames">' +
-                'Require nicknames<br/><br/>' +
-                'Set a password to lock your room:' +
-                '<input id="lockKey" type="text" placeholder="your password"' +
-                'autofocus>',
+                 settings3 +
+                '<input id="lockKey" type="text" placeholder="' + yourPassword +
+                '" data-i18n="[placeholder]dialog.yourPassword" autofocus>',
+            null,
             null,
             false,
-            "Save",
+            "dialog.Save",
             function () {
                 document.getElementById('lockKey').focus();
             },
@@ -1279,7 +1327,6 @@ var Toolbar = (function (my) {
             }
         );
     };
-
     /**
      * Toggles the application in and out of full screen mode
      * (a.k.a. presentation mode in Chrome).
@@ -1352,21 +1399,69 @@ var Toolbar = (function (my) {
 
     // Sets the state of the recording button
     my.setRecordingButtonState = function (isRecording) {
+        var selector = $('#recordButton');
         if (isRecording) {
-            $('#recordButton').removeClass("icon-recEnable");
-            $('#recordButton').addClass("icon-recEnable active");
+            selector.removeClass("icon-recEnable");
+            selector.addClass("icon-recEnable active");
         } else {
-            $('#recordButton').removeClass("icon-recEnable active");
-            $('#recordButton').addClass("icon-recEnable");
+            selector.removeClass("icon-recEnable active");
+            selector.addClass("icon-recEnable");
         }
     };
 
     // Shows or hides SIP calls button
     my.showSipCallButton = function (show) {
         if (APP.xmpp.isSipGatewayEnabled() && show) {
-            $('#sipCallButton').css({display: "inline"});
+            $('#sipCallButton').css({display: "inline-block"});
         } else {
             $('#sipCallButton').css({display: "none"});
+        }
+    };
+
+    // Shows or hides the dialpad button
+    my.showDialPadButton = function (show) {
+        if (show) {
+            $('#dialPadButton').css({display: "inline-block"});
+        } else {
+            $('#dialPadButton').css({display: "none"});
+        }
+    };
+
+    /**
+     * Displays user authenticated identity name(login).
+     * @param authIdentity identity name to be displayed.
+     */
+    my.setAuthenticatedIdentity = function (authIdentity) {
+        if (authIdentity) {
+            var selector = $('#toolbar_auth_identity');
+            selector.css({display: "list-item"});
+            selector.text(authIdentity);
+        } else {
+            $('#toolbar_auth_identity').css({display: "none"});
+        }
+    };
+
+    /**
+     * Shows/hides login button.
+     * @param show <tt>true</tt> to show
+     */
+    my.showLoginButton = function (show) {
+        if (show) {
+            $('#toolbar_button_login').css({display: "list-item"});
+        } else {
+            $('#toolbar_button_login').css({display: "none"});
+        }
+    };
+
+    /**
+     * Shows/hides logout button.
+     * @param show <tt>true</tt> to show
+     */
+    my.showLogoutButton = function (show) {
+        if (show) {
+            $('#toolbar_button_logout').css({display: "list-item"});
+        } else {
+            $('#toolbar_button_logout').css({display: "none"});
         }
     };
 
@@ -1386,6 +1481,7 @@ var Toolbar = (function (my) {
             button.removeClass("glow");
         }
     };
+
 
     return my;
 }(Toolbar || {}));

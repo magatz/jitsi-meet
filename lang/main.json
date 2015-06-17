@@ -3,6 +3,12 @@
     "connectionsettings": "Connection Settings",
     "poweredby": "powered by",
     "downloadlogs": "Download logs",
+    "roomUrlDefaultMsg": "Your conference is currently being created...",
+    "participant": "Participant",
+    "me": "me",
+    "speaker": "Speaker",
+    "defaultNickname": "ex. __name__",
+    "defaultPreziLink": "e.g. __url__",
     "welcomepage":{
         "go": "GO",
         "roomname": "Enter room name",
@@ -54,12 +60,15 @@
         "fullscreen": "Enter / Exit Full Screen",
         "sip": "Call SIP number",
         "Settings": "Settings",
-        "hangup": "Hang Up"
+        "hangup": "Hang Up",
+        "login": "Login",
+        "logout": "Logout",
+        "dialpad": "Show dialpad"
     },
     "bottomtoolbar": {
         "chat": "Open / close chat",
-        "filmstrip": "Open / close contact list",
-        "contactlist": "Show / hide film strip"
+        "filmstrip": "Show / hide film strip",
+        "contactlist": "Open / close contact list"
     },
     "chat":{
         "nickname": {
@@ -72,7 +81,9 @@
     {
         "title": "SETTINGS",
         "update": "Update",
-        "name": "Name"
+        "name": "Name",
+        "startAudioMuted": "start without audio",
+        "startVideoMuted": "start without video"
     },
     "videothumbnail":
     {
@@ -88,39 +99,144 @@
     "connectionindicator":
     {
         "bitrate": "Bitrate:",
-        "packetloss": "Packet loss: ",
+        "packetloss": "Packet loss:",
         "resolution": "Resolution:",
         "less": "Show less",
         "more": "Show more",
         "address": "Address:",
-        "remoteports": "Remote ports:",
-        "localports": "Local ports:",
+        "remoteport_plural": "Remote ports:",
+        "localport_plural": "Local ports:",
         "remoteport": "Remote port:",
         "localport": "Local port:",
-        "localaddress": "Local address: ",
-        "localaddresses": "Local addresses: ",
-        "remoteaddress": "Remote address: ",
-        "remoteaddresses": "Remote addresses: ",
-        "transport": "Transport: ",
+        "localaddress": "Local address:",
+        "localaddress_plural": "Local addresses:",
+        "remoteaddress": "Remote address:",
+        "remoteaddress_plural": "Remote addresses:",
+        "transport": "Transport:",
         "bandwidth": "Estimated bandwidth:",
         "na": "Come back here for connection information once the conference starts"
     },
     "notify": {
         "disconnected": "disconnected",
-        "moderator": "Moderator rights granted !",
+        "moderator": "Moderator rights granted!",
         "connected": "connected",
         "somebody": "Somebody",
         "me": "Me",
         "focus": "Conference focus",
         "focusFail": "__component__ not available - retry in __ms__ sec",
         "grantedTo": "Moderator rights granted to __to__!",
-        "grantedToUnknown": "Moderator rights granted to $t(somebody)!"
-
+        "grantedToUnknown": "Moderator rights granted to $t(somebody)!",
+        "muted": "You have started the conversation muted.",
+        "mutedTitle": "You're muted!"
+    },
+    "dialog": {
+        "kickMessage": "Ouch! You have been kicked out of the meet!",
+        "popupError": "Your browser is blocking popup windows from this site. Please enable popups in your browser security settings and try again.",
+        "passwordError": "This conversation is currently protected by a password. Only the owner of the conference could set a password.",
+        "passwordError2": "This conversation isn't currently protected by a password. Only the owner of the conference could set a password.",
+        "joinError": "Oops! We couldn't join the conference. There might be some problem with security configuration. Please contact service administrator.",
+        "connectError": "Oops! Something went wrong and we couldn't connect to the conference.",
+        "connectErrorWithMsg": "Oops! Something went wrong and we couldn't connect to the conference: __msg__",
+        "connecting": "Connecting",
+        "error": "Error",
+        "detectext": "Error when trying to detect desktopsharing extension.",
+        "failtoinstall": "Failed to install desktop sharing extension",
+        "failedpermissions": "Failed to obtain permissions to use the local microphone and/or camera.",
+        "bridgeUnavailable": "Jitsi Videobridge is currently unavailable. Please try again later!",
+        "lockTitle": "Lock failed",
+        "lockMessage": "Failed to lock conference.",
+        "warning": "Warning",
+        "passwordNotSupported": "Room passwords are currently not supported.",
+        "sorry": "Sorry",
+        "internalError": "Internal application error [setRemoteDescription]",
+        "unableToSwitch": "Unable to switch video stream.",
+        "SLDFailure": "Oops! Something went wrong and we failed to mute! (SLD Failure)",
+        "SRDFailure": "Oops! Something went wrong and we failed to stop video! (SRD Failure)",
+        "oops": "Oops!",
+        "defaultError": "There was some kind of error",
+        "passwordRequired": "Password required",
+        "Ok": "Ok",
+        "removePreziTitle": "Remove Prezi",
+        "removePreziMsg": "Are you sure you would like to remove your Prezi?",
+        "sharePreziTitle": "Share a Prezi",
+        "sharePreziMsg": "Another participant is already sharing a Prezi.This conference allows only one Prezi at a time.",
+        "Remove": "Remove",
+        "WaitingForHost": "Waiting for the host ...",
+        "WaitForHostMsg": "The conference <b>__room__ </b> has not yet started. If you are the host then please authenticate. Otherwise, please wait for the host to arrive.",
+        "IamHost": "I am the host",
+        "Cancel": "Cancel",
+        "retry": "Retry",
+        "logoutTitle" : "Logout",
+        "logoutQuestion" : "Are you sure you want to logout and stop the conference?",
+        "sessTerminated": "Session Terminated",
+        "hungUp": "You hung up the call",
+        "joinAgain": "Join again",
+        "Share": "Share",
+        "preziLinkError": "Please provide a correct prezi link.",
+        "Save": "Save",
+        "recordingToken": "Enter recording token",
+        "Dial": "Dial",
+        "sipMsg": "Enter SIP number",
+        "passwordCheck": "Are you sure you would like to remove your password?",
+        "Remove": "Remove",
+        "passwordMsg": "Set a password to lock your room",
+        "Invite": "Invite",
+        "shareLink": "Share this link with everyone you want to invite",
+        "settings1": "Configure your conference",
+        "settings2": "Participants join muted",
+        "settings3": "Require nicknames<br/><br/>Set a password to lock your room:",
+        "yourPassword": "your password",
+        "Back": "Back",
+        "serviceUnavailable": "Service unavailable",
+        "gracefulShutdown": "Our service is currently down for maintenance. Please try again later.",
+        "Yes": "Yes",
+        "reservationError": "Reservation system error",
+        "reservationErrorMsg": "Error code: __code__, message: __msg__",
+        "password": "password",
+        "userPassword": "user password",
+        "token": "token"
+    },
+    "email":
+    {
+        "sharedKey": [
+            "This conference is password protected. Please use the following pin when joining:",
+            "",
+            "",
+            "__sharedKey__",
+            "",
+            ""],
+        "subject": "Invitation to a __appName__ (__conferenceName__)",
+        "body": [
+            "Hey there, I%27d like to invite you to a __appName__ conference I%27ve just set up.",
+            "",
+            "",
+            "Please click on the following link in order to join the conference.",
+            "",
+            "",
+            "__roomUrl__",
+            "",
+            "",
+            "__sharedKeyText__",
+            " Note that __appName__ is currently only supported by __supportedBrowsers__, so you need to be using one of these browsers.",
+            "",
+            "",
+            "Talk to you in a sec!"
+        ],
+        "and": "and"
+    },
+    "connection":
+    {
+        "ERROR": "Error",
+        "CONNECTING": "Connecting",
+        "CONNFAIL": "Connection failed",
+        "AUTHENTICATING": "Authenticating",
+        "AUTHFAIL": "Authentication failed",
+        "CONNECTED": "Connected",
+        "DISCONNECTED": "Disconnected",
+        "DISCONNECTING": "Disconnecting",
+        "ATTACHED": "Attached",
+        "FETCH_SESSION_ID": "Obtaining session-id...",
+        "GOT_SESSION_ID": "Obtaining session-id... Done",
+        "GET_SESSION_ID_ERROR": "Get session-id error: "
     }
-
-
-
-
-
-
 }

@@ -11,83 +11,151 @@ var eventEmitter = new EventEmitter();
 var connection = null;
 var authenticatedUser = false;
 
-function connect(jid, password, uiCredentials) {
-    var bosh
-        = (uiCredentials && uiCredentials.bosh? uiCredentials.bosh : null)
-        || config.bosh || '/http-bind';
-    connection = new Strophe.Connection(bosh);
-    Moderator.setConnection(connection);
+function connect(jid, password) {
 
-    if(uiCredentials) {
-        var email = uiCredentials.email;
-        var displayName = USER;
-        if (email) {
-            connection.emuc.addEmailToPresence(email);
-        } else {
-            connection.emuc.addUserIdToPresence(uiCredentials.uid);
+    var faultTolerantConnect = retry.operation({
+        retries: 3
+    });
+
+    // fault tolerant connect
+    faultTolerantConnect.attempt(function () {
+
+        connection = XMPP.createConnection();
+        Moderator.setConnection(connection);
+
+        if (connection.disco) {
+            // for chrome, add multistream cap
         }
-        if (displayName) {
-            connection.emuc.addDisplayNameToPresence(displayName);
+        connection.jingle.pc_constraints = APP.RTC.getPCConstraints();
+        if (config.useIPv6) {
+            // https://code.google.com/p/webrtc/issues/detail?id=2828
+            if (!connection.jingle.pc_constraints.optional)
+                connection.jingle.pc_constraints.optional = [];
+            connection.jingle.pc_constraints.optional.push({googIPv6: true});
         }
-    }
 
-    if (connection.disco) {
-        // for chrome, add multistream cap
-    }
-    connection.jingle.pc_constraints = APP.RTC.getPCConstraints();
-    if (config.useIPv6) {
-        // https://code.google.com/p/webrtc/issues/detail?id=2828
-        if (!connection.jingle.pc_constraints.optional)
-            connection.jingle.pc_constraints.optional = [];
-        connection.jingle.pc_constraints.optional.push({googIPv6: true});
-    }
+        // Include user info in MUC presence
+        var settings = Settings.getSettings();
+        if (settings.email) {
+            connection.emuc.addEmailToPresence(settings.email);
+        }
+        if (settings.uid) {
+            connection.emuc.addUserIdToPresence(settings.uid);
+        }
+        if (settings.displayName) {
+            connection.emuc.addDisplayNameToPresence(settings.displayName);
+        }
 
-    if(!password)
-        //password = uiCredentials.password;
-        password = "MySv3vA17112003";
 
-    var anonymousConnectionFailed = false;
-    connection.connect(jid, password, function (status, msg) {
-        console.log('Strophe status changed to',
-            Strophe.getStatusString(status));
-        if (status === Strophe.Status.CONNECTED) {
-            if (config.useStunTurn) {
-                connection.jingle.getStunAndTurnCredentials();
-            }
-            APP.UI.disableConnect();
+        // connection.connect() starts the connection process.
+        //
+        // As the connection process proceeds, the user supplied callback will
+        // be triggered multiple times with status updates. The callback should
+        // take two arguments - the status code and the error condition.
+        //
+        // The status code will be one of the values in the Strophe.Status
+        // constants. The error condition will be one of the conditions defined
+        // in RFC 3920 or the condition ‘strophe-parsererror’.
+        //
+        // The Parameters wait, hold and route are optional and only relevant
+        // for BOSH connections. Please see XEP 124 for a more detailed
+        // explanation of the optional parameters.
+        //
+        // Connection status constants for use by the connection handler
+        // callback.
+        //
+        //  Status.ERROR - An error has occurred (websockets specific)
+        //  Status.CONNECTING - The connection is currently being made
+        //  Status.CONNFAIL - The connection attempt failed
+        //  Status.AUTHENTICATING - The connection is authenticating
+        //  Status.AUTHFAIL - The authentication attempt failed
+        //  Status.CONNECTED - The connection has succeeded
+        //  Status.DISCONNECTED - The connection has been terminated
+        //  Status.DISCONNECTING - The connection is currently being terminated
+        //  Status.ATTACHED - The connection has been attached
 
-            console.info("My Jabber ID: " + connection.jid);
+        var anonymousConnectionFailed = false;
+        var connectionFailed = false;
+        var lastErrorMsg;
+        connection.connect(jid, password, function (status, msg) {
+            console.log('Strophe status changed to',
+                Strophe.getStatusString(status), msg);
+            if (status === Strophe.Status.CONNECTED) {
+                if (config.useStunTurn) {
+                    connection.jingle.getStunAndTurnCredentials();
+                }
 
-            if(password)
-                authenticatedUser = true;
-            maybeDoJoin();
-        } else if (status === Strophe.Status.CONNFAIL) {
-            if(msg === 'x-strophe-bad-non-anon-jid') {
-                anonymousConnectionFailed = true;
-            }
-        } else if (status === Strophe.Status.DISCONNECTED) {
-            if(anonymousConnectionFailed) {
-                // prompt user for username and password
+                console.info("My Jabber ID: " + connection.jid);
+                // Django integration informations
+                console.log('Django role is: ', ROLE);
+                console.log('Django user is:' + USER);
+                
+                // prosody default password (need to store elsewhere)
+                if(!password)
+                    password = "MySv3vA17112003";
+
+                if (password)
+                    authenticatedUser = true;
+                maybeDoJoin();
+            } else if (status === Strophe.Status.CONNFAIL) {
+                if (msg === 'x-strophe-bad-non-anon-jid') {
+                    anonymousConnectionFailed = true;
+                } else {
+                    connectionFailed = true;
+                }
+                lastErrorMsg = msg;
+            } else if (status === Strophe.Status.DISCONNECTED) {
+                if (anonymousConnectionFailed) {
+                    // prompt user for username and password
+                    XMPP.promptLogin();
+                } else {
+
+                    // Strophe already has built-in HTTP/BOSH error handling and
+                    // request retry logic. Requests are resent automatically
+                    // until their error count reaches 5. Strophe.js disconnects
+                    // if the error count is > 5. We are not replicating this
+                    // here.
+                    //
+                    // The "problem" is that failed HTTP/BOSH requests don't
+                    // trigger a callback with a status update, so when a
+                    // callback with status Strophe.Status.DISCONNECTED arrives,
+                    // we can't be sure if it's a graceful disconnect or if it's
+                    // triggered by some HTTP/BOSH error.
+                    //
+                    // But that's a minor issue in Jitsi Meet as we never
+                    // disconnect anyway, not even when the user closes the
+                    // browser window (which is kind of wrong, but the point is
+                    // that we should never ever get disconnected).
+                    //
+                    // On the other hand, failed connections due to XMPP layer
+                    // errors, trigger a callback with status Strophe.Status.CONNFAIL.
+                    //
+                    // Here we implement retry logic for failed connections due
+                    // to XMPP layer errors and we display an error to the user
+                    // if we get disconnected from the XMPP server permanently.
+
+                    // If the connection failed, retry.
+                    if (connectionFailed
+                        && faultTolerantConnect.retry("connection-failed")) {
+                        return;
+                    }
+
+                    // If we failed to connect to the XMPP server, fire an event
+                    // to let all the interested module now about it.
+                    eventEmitter.emit(XMPPEvents.CONNECTION_FAILED,
+                        msg ? msg : lastErrorMsg);
+                }
+            } else if (status === Strophe.Status.AUTHFAIL) {
+                // wrong password or username, prompt user
                 XMPP.promptLogin();
+
             }
-        } else if (status === Strophe.Status.AUTHFAIL) {
-            // wrong password or username, prompt user
-            XMPP.promptLogin();
-
-        }
-
-        if (ROLE == "watcher") {
-            callback = null
-            XMPP.setVideoMute(true, callback);
-            XMPP.setAudioMute(true, callback);
-            console.log('Django role is: ', ROLE);
-            //console.log ('Local video')
-        }
-
+        });
     });
 }
 
 
+        
 
 function maybeDoJoin() {
     if (connection && connection.connected &&
@@ -120,51 +188,73 @@ function initStrophePlugins()
 function registerListeners() {
     APP.RTC.addStreamListener(maybeDoJoin,
         StreamEventTypes.EVENT_TYPE_LOCAL_CREATED);
+    APP.RTC.addListener(RTCEvents.AVAILABLE_DEVICES_CHANGED, function (devices) {
+        XMPP.addToPresence("devices", devices);
+    })
     APP.UI.addListener(UIEvents.NICKNAME_CHANGED, function (nickname) {
         XMPP.addToPresence("displayName", nickname);
     });
 }
 
-function setupEvents() {
-    $(window).bind('beforeunload', function () {
-        if (connection && connection.connected) {
-            // ensure signout for users watcher
-            
-            var data = "<body rid='" + (connection.rid || connection._proto.rid)
-                    + "' xmlns='http://jabber.org/protocol/httpbind' sid='"
-                    + (connection.sid || connection._proto.sid)
-                    + "' type='terminate'>" +
-                    "<presence xmlns='jabber:client' type='unavailable'/>" +
-                    "</body>"
+var unload = (function () {
+    var unloaded = false;
 
+    return function () {
+        if (unloaded) { return; }
+        unloaded = true;
+
+        if (connection && connection.connected) {
+            // ensure signout
             $.ajax({
                 type: 'POST',
                 url: config.bosh,
                 async: false,
                 cache: false,
                 contentType: 'application/xml',
-                data: data,
+                data: "<body rid='" + (connection.rid || connection._proto.rid) +
+                    "' xmlns='http://jabber.org/protocol/httpbind' sid='" +
+                    (connection.sid || connection._proto.sid)  +
+                    "' type='terminate'>" +
+                "<presence xmlns='jabber:client' type='unavailable'/>" +
+                "</body>",
                 success: function (data) {
                     console.log('signed out');
                     console.log(data);
                 },
                 error: function (XMLHttpRequest, textStatus, errorThrown) {
                     console.log('signout error',
-                            textStatus + ' (' + errorThrown + ')');
+                        textStatus + ' (' + errorThrown + ')');
                 }
             });
-            console.log("On SetupEvents the user role is: " + ROLE);
-
-            // the performer must destroy the room, and delete the record of OpenRoom (Django)
-            if ( XMPP.myResource() == PERFORMER) {
-
-                XMPP.makeRoomNotMembersOnly();
-                deleteOpenRoom(ROOM_NAME);
-                //return "****** Please go Back and use the Back button (yellow). This way each user will be notified! ******"
-            }
         }
-        XMPP.disposeConference(true);
-    });
+        //XMPP.disposeConference(true);
+        console.log("On SetupEvents the user role is: " + ROLE);
+        // the performer must destroy the room, and delete the record of OpenRoom (Django)
+        if ( XMPP.myResource() == PERFORMER) {
+
+            // if exting from a members-only room, toggle status
+            XMPP.makeRoomNotMembersOnly();
+            // delete Django record with DELETE REST call    
+            deleteOpenRoom(ROOM_NAME);
+        }
+    };
+})();
+
+function setupEvents() {
+    // In recent versions of FF the 'beforeunload' event is not fired when the
+    // window or the tab is closed. It is only fired when we leave the page
+    // (change URL). If this participant doesn't unload properly, then it
+    // becomes a ghost for the rest of the participants that stay in the
+    // conference. Thankfully handling the 'unload' event in addition to the
+    // 'beforeunload' event seems to garante the execution of the 'unload'
+    // method at least once.
+    //
+    // The 'unload' method can safely be run multiple times, it will actually do
+    // something only the first time that it's run, so we're don't have to worry
+    // about browsers that fire both events.
+
+    $(window).bind('beforeunload', unload);
+    $(window).bind('unload', unload);    
 }
 
 function deleteOpenRoom(roomName, callback){
@@ -205,13 +295,18 @@ function getCookie(name) {
 }
 
 var XMPP = {
+    getConnection: function(){ return connection; },
     sessionTerminated: false,
+    /**
+     * XMPP connection status
+     */
+    Status: Strophe.Status,
     /**
      * Remembers if we were muted by the focus.
      * @type {boolean}
      */
     forceMuted: false,
-    start: function (uiCredentials) {
+    start: function () {
         setupEvents();
         initStrophePlugins();
         registerListeners();
@@ -222,9 +317,17 @@ var XMPP = {
             window.location.search.indexOf("login=true") !== -1) {
             configDomain = config.hosts.domain;
         }
-        //var jid = uiCredentials.jid || configDomain || window.location.hostname;
+        // Django integration specific
         var jid = USER + "@" + configDomain ;
         connect(jid, null, uiCredentials);
+    },
+        createConnection: function () {
+        var bosh = config.bosh || '/http-bind';
+
+        return new Strophe.Connection(bosh);
+    },
+    getStatusString: function (status) {
+        return Strophe.getStatusString(status);
     },
     promptLogin: function () {
         APP.UI.showLoginPopup(connect);
@@ -295,29 +398,52 @@ var XMPP = {
     isModerator: function () {
         return Moderator.isModerator();
     },
+    getPopupLoginUrl: function (roomName, callback) {
+        Moderator.getPopupLoginUrl(roomName, callback);
+    },
+    isModerator: function () {
+        return Moderator.isModerator();
+    },
     isSipGatewayEnabled: function () {
         return Moderator.isSipGatewayEnabled();
     },
     isExternalAuthEnabled: function () {
         return Moderator.isExternalAuthEnabled();
     },
-    switchStreams: function (stream, oldStream, callback) {
+    switchStreams: function (stream, oldStream, callback, isAudio) {
         if (connection && connection.jingle.activecall) {
             // FIXME: will block switchInProgress on true value in case of exception
-            connection.jingle.activecall.switchStreams(stream, oldStream, callback);
+            connection.jingle.activecall.switchStreams(stream, oldStream, callback, isAudio);
         } else {
             // We are done immediately
-            console.error("No conference handler");
-            APP.UI.messageHandler.showError('Error',
-                'Unable to switch video stream.');
+            console.warn("No conference handler or conference not started yet");
             callback();
         }
     },
+    sendVideoInfoPresence: function (mute) {
+        if(!connection)
+            return;
+        connection.emuc.addVideoInfoToPresence(mute);
+        connection.emuc.sendPresence();
+    },
     setVideoMute: function (mute, callback, options) {
-       if(connection && APP.RTC.localVideo && connection.jingle.activecall)
-       {
-           connection.jingle.activecall.setVideoMute(mute, callback, options);
-       }
+        if(!connection)
+            return;
+        var self = this;
+        var localCallback = function (mute) {
+            self.sendVideoInfoPresence(mute);
+            return callback(mute);
+        };
+
+        if(connection.jingle.activecall)
+        {
+            connection.jingle.activecall.setVideoMute(
+                mute, localCallback, options);
+        }
+        else {
+            localCallback(mute);
+        }
+
     },
     setAudioMute: function (mute, callback) {
         if (!(connection && APP.RTC.localAudio)) {
@@ -340,10 +466,17 @@ var XMPP = {
         // It is not clear what is the right way to handle multiple tracks.
         // So at least make sure that they are all muted or all unmuted and
         // that we send presence just once.
-        APP.RTC.localAudio.mute();
+        APP.RTC.localAudio.setMute(!mute);
         // isMuted is the opposite of audioEnabled
-        connection.emuc.addAudioInfoToPresence(mute);
-        connection.emuc.sendPresence();
+        this.sendAudioInfoPresence(mute, callback);
+        return true;
+    },
+    sendAudioInfoPresence: function(mute, callback)
+    {
+        if(connection) {
+            connection.emuc.addAudioInfoToPresence(mute);
+            connection.emuc.sendPresence();
+        }
         callback();
         return true;
     },
@@ -416,6 +549,15 @@ var XMPP = {
                 break;
             case "email":
                 connection.emuc.addEmailToPresence(value);
+            case "devices":
+                connection.emuc.addDevicesToPresence(value);
+                break;
+            case "startMuted":
+                if(!Moderator.isModerator())
+                    return;
+                connection.emuc.addStartMutedToPresence(value[0],
+                    value[1]);
+                break;
             default :
                 console.log("Unknown tag for presence.");
                 return;
@@ -468,13 +610,16 @@ var XMPP = {
     sendChatMessage: function (message, nickname) {
         connection.emuc.sendMessage(message, nickname);
     },
-
+    // CXC specific messages
+    // direct tip message during the show
     sendTipMessage: function (message, nickname, amount, balance, notify) {
         connection.emuc.sendTipMessage(message, nickname, amount, balance, notify);
     },
+    // send message about private show
     sendPriShowMessage: function (message, nickname, rate, balance_limit, spy_rate) {
         connection.emuc.sendPrivateShowMessage(message, nickname, rate, balance_limit, spy_rate, 'private');
     },
+    // send message about ticket show
     sendTickShowMessage: function (message, nickname, min_n_users, group_token_per_min, full_ticket_price) {
         connection.emuc.sendTicketShowMessage(message, nickname, min_n_users, group_token_per_min, full_ticket_price, 'ticket');
     },
@@ -493,15 +638,19 @@ var XMPP = {
     makeRoomNotMembersOnly: function(onSuccess, onError, onNotSupported){
         connection.emuc.makeRoomNotMembersOnly(onSuccess, onError, onNotSupported);
     },
+    // revoke membership toa jid
     revokeMembership: function(jid){
         connection.emuc.revokeMembership(jid);
     },
+    // update Django room status (private, ticket)
     updateOpenRoom: function (roomName, roomType, callback){
         connection.emuc.updateOpenRoom(roomName, roomType, callback);
     },
+    // record show requests
     registerShowRequest: function(roomInstance, userId, showType, callback){
         connection.emuc.registerShowRequest(roomInstance, userId, showType, callback);
     },
+    // end of CXC specific messages
     setSubject: function (topic) {
         connection.emuc.setSubject(topic);
     },
@@ -520,6 +669,7 @@ var XMPP = {
     logout: function (callback) {
         Moderator.logout(callback);
     },
+    // CXC specific for banning users
     banuser: function (jid) {
         connection.moderate.ban(jid);
     },
@@ -545,8 +695,13 @@ var XMPP = {
     },
     getSessions: function () {
         return connection.jingle.sessions;
+    },
+    removeStream: function (stream) {
+        if(!connection || !connection.jingle.activecall ||
+            !connection.jingle.activecall.peerconnection)
+            return;
+        connection.jingle.activecall.peerconnection.removeStream(stream);
     }
- 
 };
 
 module.exports = XMPP;

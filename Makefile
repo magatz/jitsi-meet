@@ -14,11 +14,11 @@ compile-debug:FLAGS = -d $(GLOBAL_FLAGS)
 compile-debug: app
 
 app:
-	$(BROWSERIFY) $(FLAGS) app.js -s APP -o $(OUTPUT_DIR)/app.bundle.js
+	$(NPM) update && $(BROWSERIFY) $(FLAGS) app.js -s APP -o $(OUTPUT_DIR)/app.bundle.js
 
 clean:
 	@rm -f $(OUTPUT_DIR)/*.bundle.js
 
 deploy:
-	@mkdir -p $(DEPLOY_DIR) && cp $(OUTPUT_DIR)/*.bundle.js $(DEPLOY_DIR)
+	@mkdir -p $(DEPLOY_DIR) && cp $(OUTPUT_DIR)/*.bundle.js $(DEPLOY_DIR) && ./bump-js-versions.sh
 	
